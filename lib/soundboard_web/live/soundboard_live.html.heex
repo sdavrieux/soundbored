@@ -38,6 +38,8 @@
   </div>
 
   <%!-- Search Bar --%>
+  <.radio_desk volume={@master_volume} capture={@capture} recordings={@recordings} />
+
   <div class="mb-8">
     <form phx-change="search" phx-submit="search" class="relative">
       <input

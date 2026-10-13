@@ -63,3 +63,12 @@ TODO
 .pi/
 
 .env.local
+
+# Local configuration, databases and captured conversations must stay private.
+.env.*
+.*.env
+.*.overrides.env
+*.db
+*.db-shm
+*.db-wal
+/priv/recordings/

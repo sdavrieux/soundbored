@@ -10,6 +10,10 @@ source!([
   System.get_env()
 ])
 
+config :soundboard,
+       :recordings_dir,
+       env!("SOUNDBOARD_RECORDINGS_DIR", :string, Path.expand("priv/recordings"))
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration

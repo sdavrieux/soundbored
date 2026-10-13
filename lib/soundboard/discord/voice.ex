@@ -45,6 +45,9 @@ defmodule Soundboard.Discord.Voice do
     voice_module().playing?(to_id(guild_id))
   end
 
+  def start_listening(guild_id), do: voice_module().start_listening(to_id(guild_id))
+  def stop_listening(guild_id), do: voice_module().stop_listening(to_id(guild_id))
+
   # Compatibility shape for existing RTP probe code.
   def get_voice(guild_id) do
     case voice_module().get_voice_state(to_id(guild_id)) do

@@ -198,15 +198,19 @@ defmodule Soundboard.AudioPlayer do
         {:idle_timeout, token},
         %{idle_timeout_ref: {_ref, token}, voice_channel: {guild_id, _}} = state
       ) do
-    Logger.info("Voice idle timeout in guild #{guild_id}; leaving channel")
-    safely_leave(guild_id)
+    if Soundboard.Capture.active?(guild_id) do
+      {:noreply, reset_idle_timeout(state)}
+    else
+      Logger.info("Voice idle timeout in guild #{guild_id}; leaving channel")
+      safely_leave(guild_id)
 
-    new_state =
-      %{state | idle_timeout_ref: nil}
-      |> PlaybackQueue.clear_all()
-      |> Map.put(:voice_channel, nil)
+      new_state =
+        %{state | idle_timeout_ref: nil}
+        |> PlaybackQueue.clear_all()
+        |> Map.put(:voice_channel, nil)
 
-    {:noreply, new_state}
+      {:noreply, new_state}
+    end
   end
 
   def handle_info({:idle_timeout, _stale_token}, state), do: {:noreply, state}

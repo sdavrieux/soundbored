@@ -74,6 +74,7 @@ defmodule Soundboard.Discord.Handler do
     State.update_state(payload.user_id, nil, payload.session_id)
 
     if VoiceRuntime.bot_user?(payload.user_id) do
+      Soundboard.Capture.channel_changed(payload.guild_id, nil)
       Logger.debug("Skipping leave sound lookup for bot user #{payload.user_id}")
     else
       SoundEffects.handle_leave(payload.user_id)
@@ -86,6 +87,8 @@ defmodule Soundboard.Discord.Handler do
     Logger.info("Voice state update received: #{inspect(payload)}")
 
     if VoiceRuntime.bot_user?(payload.user_id) do
+      Soundboard.Capture.channel_changed(payload.guild_id, payload.channel_id)
+
       Logger.info(
         "BOT VOICE STATE UPDATE - Bot joined channel #{payload.channel_id} in guild #{payload.guild_id}"
       )

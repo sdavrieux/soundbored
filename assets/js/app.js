@@ -98,6 +98,34 @@ const stopActiveLocalPlayer = () => {
 window.addEventListener("phx:stop-all-sounds", stopActiveLocalPlayer)
 
 let Hooks = {}
+Hooks.MasterVolume = {
+  mounted() {
+    this.editing = false
+    this.onChange = () => {
+      this.editing = false
+      this.pushEvent("set_master_volume", {volume: this.el.value})
+    }
+    this.onInput = () => {
+      this.editing = true
+      document.getElementById("master-volume-value").textContent = `${this.el.value}%`
+    }
+    this.onBlur = () => {
+      this.editing = false
+      this.el.value = this.el.getAttribute("value")
+    }
+    this.el.addEventListener("input", this.onInput)
+    this.el.addEventListener("change", this.onChange)
+    this.el.addEventListener("blur", this.onBlur)
+  },
+  updated() {
+    if (!this.editing) this.el.value = this.el.getAttribute("value")
+  },
+  destroyed() {
+    this.el.removeEventListener("input", this.onInput)
+    this.el.removeEventListener("change", this.onChange)
+    this.el.removeEventListener("blur", this.onBlur)
+  }
+}
 Hooks.LocalPlayer = {
   mounted() {
     this.audio = null

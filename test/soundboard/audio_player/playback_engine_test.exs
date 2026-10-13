@@ -1,5 +1,5 @@
 defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
-  use ExUnit.Case, async: false
+  use Soundboard.DataCase, async: false
 
   import ExUnit.CaptureLog
   import Mock
@@ -30,6 +30,7 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
   end
 
   test "joins the requested channel before playing" do
+    assert {:ok, 50} = Soundboard.MasterVolume.set(50)
     test_pid = self()
 
     with_mocks([
@@ -40,7 +41,7 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
          channel_id: fn "guild-1" -> nil end,
          join_channel: fn "guild-1", "channel-9" -> send(test_pid, :joined_channel) end,
          ready?: fn "guild-1" -> true end,
-         play: fn "guild-1", "/tmp/intro.mp3", :url, [volume: 0.8] ->
+         play: fn "guild-1", "/tmp/intro.mp3", :url, [volume: 0.4] ->
            send(test_pid, :played_sound)
            :ok
          end

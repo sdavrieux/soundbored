@@ -5,8 +5,9 @@ defmodule SoundboardWeb.SoundboardLive do
   import EditModal
   import DeleteModal
   import UploadModal
+  import SoundboardWeb.Components.Soundboard.RadioDesk, only: [radio_desk: 1]
   import SoundboardWeb.Components.Soundboard.TagComponents, only: [tag_filter_button: 1]
-  alias Soundboard.{Favorites, PubSubTopics, Sounds}
+  alias Soundboard.{Capture, Favorites, MasterVolume, PubSubTopics, Sounds}
   alias SoundboardWeb.Live.SoundboardLive.{EditFlow, UploadFlow}
   alias SoundboardWeb.Live.Support.{FlashHelpers, SoundPlayback}
   alias SoundboardWeb.Soundboard.SoundFilter
@@ -20,6 +21,7 @@ defmodule SoundboardWeb.SoundboardLive do
       if connected?(socket) do
         PubSubTopics.subscribe_files()
         PubSubTopics.subscribe_playback()
+        PubSubTopics.subscribe_desk()
         send(self(), :load_sound_files)
         socket
       else
@@ -43,6 +45,9 @@ defmodule SoundboardWeb.SoundboardLive do
 
   defp assign_initial_state(socket) do
     socket
+    |> assign(:master_volume, MasterVolume.get())
+    |> assign(:capture, Capture.status())
+    |> assign(:recordings, Capture.Storage.list())
     |> assign(:uploaded_files, [])
     |> assign(:loading_sounds, true)
     |> assign(:search_query, "")
@@ -63,6 +68,31 @@ defmodule SoundboardWeb.SoundboardLive do
       ]
     )
   end
+
+  @impl true
+  def handle_event("set_master_volume", _, %{assigns: %{current_user: nil}} = socket) do
+    {:noreply, put_flash(socket, :error, "Sign in to change master volume")}
+  end
+
+  def handle_event("set_master_volume", %{"volume" => volume}, socket) do
+    case MasterVolume.set(volume) do
+      {:ok, level} ->
+        stop_if_muted(level)
+        {:noreply, assign(socket, :master_volume, level)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Choose a volume between 0 and 100%")}
+    end
+  end
+
+  def handle_event("mute_master", _, socket),
+    do: handle_event("set_master_volume", %{"volume" => "0"}, socket)
+
+  def handle_event("start_capture", _, socket),
+    do: capture_action(socket, &Capture.start_capture/0)
+
+  def handle_event("stop_capture", _, socket), do: capture_action(socket, &Capture.stop_capture/0)
+  def handle_event("save_moment", _, socket), do: capture_action(socket, &Capture.save/0)
 
   @impl true
   def handle_event("validate", _params, socket), do: {:noreply, socket}
@@ -309,6 +339,25 @@ defmodule SoundboardWeb.SoundboardLive do
   end
 
   @impl true
+  def handle_info({:master_volume, volume}, socket),
+    do: {:noreply, assign(socket, :master_volume, volume)}
+
+  def handle_info({:capture_status, status}, socket),
+    do: {:noreply, assign(socket, :capture, status)}
+
+  def handle_info({:capture_saved, result}, socket) do
+    socket = assign(socket, :recordings, Capture.Storage.list())
+
+    case result do
+      {:ok, _} ->
+        {:noreply, put_flash(socket, :info, "Moment saved. Download it from Saved moments.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, capture_error(reason))}
+    end
+  end
+
+  @impl true
   def handle_info({:error, message}, socket) do
     {:noreply, put_flash(socket, :error, message)}
   end
@@ -356,4 +405,33 @@ defmodule SoundboardWeb.SoundboardLive do
   defp handle_progress(:audio, _entry, socket) do
     {:noreply, socket}
   end
+
+  defp capture_action(socket, action) do
+    if socket.assigns.current_user do
+      case action.() do
+        :ok -> {:noreply, assign(socket, :capture, Capture.status())}
+        {:error, reason} -> {:noreply, put_flash(socket, :error, capture_error(reason))}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Sign in to capture a moment")}
+    end
+  end
+
+  defp stop_if_muted(0), do: Soundboard.AudioPlayer.stop_sound()
+  defp stop_if_muted(_), do: :ok
+
+  defp capture_error(:voice_unavailable),
+    do: "Join a voice channel and use !join before starting capture."
+
+  defp capture_error(:empty), do: "No voice audio in the last minute yet."
+  defp capture_error(:inactive), do: "Start capture first."
+  defp capture_error(:saving), do: "A moment is already being saved."
+
+  defp capture_error(:storage_full),
+    do: "Recording folder is full (200 moments). Archive clips before saving more."
+
+  defp capture_error(:ffmpeg_missing), do: "Recording export needs FFmpeg on the server."
+
+  defp capture_error(_),
+    do: "Could not save this moment. Check recording storage and voice reception."
 end

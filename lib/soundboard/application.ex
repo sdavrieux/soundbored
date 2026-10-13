@@ -16,6 +16,8 @@ defmodule Soundboard.Application do
       {Soundboard.AudioPlayer, []},
       SoundboardWeb.Telemetry,
       {Phoenix.PubSub, name: Soundboard.PubSub},
+      {Task.Supervisor, name: Soundboard.Capture.Tasks},
+      Soundboard.Capture,
       SoundboardWeb.Presence,
       SoundboardWeb.PresenceHandler,
       Soundboard.Discord.Handler.State,

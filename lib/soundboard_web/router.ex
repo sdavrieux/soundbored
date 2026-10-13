@@ -59,6 +59,7 @@ defmodule SoundboardWeb.Router do
     live "/stats", StatsLive
     live "/favorites", FavoritesLive
     live "/settings", SettingsLive
+    get "/recordings/:name", RecordingController, :show
   end
 
   scope "/uploads" do

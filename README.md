@@ -86,6 +86,10 @@ If you place the container behind your own reverse proxy, set `PHX_HOST` and `SC
 
 ## Usage
 
+The custom [radio desk](docs/radio-desk.md) adds a shared master volume and
+**Save last 60 seconds** for incoming channel conversations. Capture is opt-in;
+saved WAV files stay in private storage for editing after the game.
+
 After inviting the bot to your server, join a voice channel and type `!join` to have the bot join the voice channel. Type `!leave` to have the bot leave. You can upload sounds to Soundbored and trigger them there and they will play in the voice channel.
 
 The bot manages voice channels automatically in two ways:

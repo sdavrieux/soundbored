@@ -108,6 +108,7 @@ defmodule Soundboard.AudioPlayerTest do
     end
 
     test "resets idle timeout when a sound is played (play mode)" do
+      test_pid = self()
       token = make_ref()
 
       :sys.replace_state(AudioPlayer, fn state ->
@@ -125,7 +126,13 @@ defmodule Soundboard.AudioPlayerTest do
       with_mocks([
         {Soundboard.AudioPlayer.SoundLibrary, [],
          [get_sound_path: fn "test.mp3" -> {:ok, {"/path/test.mp3", 1.0}} end]},
-        {Soundboard.AudioPlayer.PlaybackEngine, [], [play: fn _, _, _, _, _, _ -> :ok end]}
+        {Soundboard.AudioPlayer.PlaybackEngine, [],
+         [
+           play: fn _, _, _, _, _, _ ->
+             send(test_pid, :playback_started)
+             :ok
+           end
+         ]}
       ]) do
         AudioPlayer.play_sound("test.mp3", "actor")
         AudioPlayer.current_voice_channel()
@@ -134,10 +141,12 @@ defmodule Soundboard.AudioPlayerTest do
         # A new token means the timer was reset
         {_ref, new_token} = state.idle_timeout_ref
         assert new_token != token
+        assert_receive :playback_started
       end
     end
 
     test "does not reset idle timeout when a sound is played in presence mode" do
+      test_pid = self()
       token = make_ref()
 
       :sys.replace_state(AudioPlayer, fn state ->
@@ -156,7 +165,13 @@ defmodule Soundboard.AudioPlayerTest do
         {AutoJoinPolicy, [], [mode: fn -> :presence end]},
         {Soundboard.AudioPlayer.SoundLibrary, [],
          [get_sound_path: fn "test.mp3" -> {:ok, {"/path/test.mp3", 1.0}} end]},
-        {Soundboard.AudioPlayer.PlaybackEngine, [], [play: fn _, _, _, _, _, _ -> :ok end]}
+        {Soundboard.AudioPlayer.PlaybackEngine, [],
+         [
+           play: fn _, _, _, _, _, _ ->
+             send(test_pid, :playback_started)
+             :ok
+           end
+         ]}
       ]) do
         AudioPlayer.play_sound("test.mp3", "actor")
         AudioPlayer.current_voice_channel()
@@ -164,6 +179,29 @@ defmodule Soundboard.AudioPlayerTest do
         state = :sys.get_state(AudioPlayer)
         {_ref, unchanged_token} = state.idle_timeout_ref
         assert unchanged_token == token
+        assert_receive :playback_started
+      end
+    end
+
+    test "active channel capture defers idle disconnect" do
+      token = make_ref()
+
+      :sys.replace_state(AudioPlayer, fn state ->
+        %{state | voice_channel: {"guild-1", "ch-1"}, idle_timeout_ref: {make_ref(), token}}
+      end)
+
+      with_mocks([
+        {Soundboard.Capture, [], [active?: fn "guild-1" -> true end]},
+        {Soundboard.Discord.Handler.IdleTimeoutPolicy, [], [timeout_ms: fn -> 60_000 end]},
+        {Voice, [], [leave_channel: fn _ -> :ok end]}
+      ]) do
+        send(AudioPlayer, {:idle_timeout, token})
+        AudioPlayer.current_voice_channel()
+        state = :sys.get_state(AudioPlayer)
+        assert state.voice_channel == {"guild-1", "ch-1"}
+        {_ref, next_token} = state.idle_timeout_ref
+        assert next_token != token
+        refute called(Voice.leave_channel(:_))
       end
     end
 

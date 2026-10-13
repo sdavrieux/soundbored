@@ -76,6 +76,11 @@ tests require FFmpeg with `libopus`. They generate synthetic tones locally;
 Discord credentials are not needed for automated tests. The Docker build uses
 the dependency versions in `mix.lock`, including EDA 0.1.3.
 
+The runtime image makes its packaged application files readable by non-root
+users even when the build checkout uses restrictive file modes. The entrypoint
+uses the compiled application without recompiling it and stops if migrations
+fail. Permissions of persistent host mounts are configured separately.
+
 Before rollout, validate DAVE negotiation and incoming audio in a private test
 guild with two participants, concurrent playback/capture, save during speech,
 channel switching, and iPad downloads. Synthetic tests do not establish live

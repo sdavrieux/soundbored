@@ -52,10 +52,10 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 COPY --from=build /app .
-RUN chmod -R a+rX /app/.mix /app/.hex
-
 COPY entrypoint.sh /app
-RUN chmod a+x /app/entrypoint.sh
+# A private build checkout can supply mode-600 files and mode-700 directories.
+# Make the packaged public source and build artifacts readable by non-root users.
+RUN chmod -R a+rX /app && chmod 0755 /app/entrypoint.sh
 
 VOLUME ["/app/priv/static/uploads"]
 EXPOSE 4000

@@ -114,6 +114,36 @@ const stopActiveLocalPlayer = () => {
 window.addEventListener("phx:stop-all-sounds", stopActiveLocalPlayer)
 
 let Hooks = {}
+Hooks.Sidebar = {
+  mounted() {
+    this.button = this.el.querySelector("[data-sidebar-toggle]")
+    this.media = window.matchMedia("(max-width: 639px)")
+    try { this.preference = localStorage.getItem("soundboard.sidebar.collapsed") } catch (_err) {}
+    this.collapsed = this.preference == null ? this.media.matches : this.preference === "true"
+    this.apply = () => {
+      document.body.classList.toggle("sidebar-collapsed", this.collapsed)
+      this.el.dataset.collapsed = String(this.collapsed)
+      this.button.setAttribute("aria-expanded", String(!this.collapsed))
+      this.button.setAttribute("aria-label", this.collapsed ? "Expand sidebar" : "Collapse sidebar")
+    }
+    this.toggle = () => {
+      this.collapsed = !this.collapsed
+      this.preference = String(this.collapsed)
+      try { localStorage.setItem("soundboard.sidebar.collapsed", this.preference) } catch (_err) {}
+      this.apply()
+    }
+    this.resize = () => { if (this.preference == null) { this.collapsed = this.media.matches; this.apply() } }
+    this.button.addEventListener("click", this.toggle)
+    this.media.addEventListener("change", this.resize)
+    this.apply()
+  },
+  updated() { this.apply() },
+  destroyed() {
+    this.button.removeEventListener("click", this.toggle)
+    this.media.removeEventListener("change", this.resize)
+  }
+}
+
 Hooks.MasterVolume = {
   mounted() {
     this.editing = false

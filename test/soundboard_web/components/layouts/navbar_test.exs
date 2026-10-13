@@ -41,14 +41,4 @@ defmodule SoundboardWeb.Components.Layouts.NavbarTest do
     # Duplicated presence entries for the same user should only render once per menu section.
     assert length(Regex.scan(~r/user-alice/, html)) == 1
   end
-
-  test "toggle-mobile-menu flips show_mobile_menu assign" do
-    {:ok, socket} = Navbar.mount(%Phoenix.LiveView.Socket{})
-
-    {:noreply, socket} = Navbar.handle_event("toggle-mobile-menu", %{}, socket)
-    assert socket.assigns.show_mobile_menu
-
-    {:noreply, socket} = Navbar.handle_event("toggle-mobile-menu", %{}, socket)
-    refute socket.assigns.show_mobile_menu
-  end
 end

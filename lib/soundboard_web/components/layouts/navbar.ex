@@ -6,31 +6,22 @@ defmodule SoundboardWeb.Components.Layouts.Navbar do
   use SoundboardWeb, :html
 
   @impl true
-  def mount(socket) do
-    {:ok, assign(socket, :show_mobile_menu, false)}
-  end
-
-  @impl true
-  def handle_event("toggle-mobile-menu", _, socket) do
-    {:noreply, assign(socket, :show_mobile_menu, !socket.assigns.show_mobile_menu)}
-  end
-
-  @impl true
   def render(assigns) do
     ~H"""
-    <aside class={["studio-sidebar", @show_mobile_menu && "is-open"]}>
-      <button
-        type="button"
-        class="sidebar-toggle"
-        aria-label="Toggle sidebar"
-        aria-expanded={to_string(@show_mobile_menu)}
-        aria-controls="studio-navigation"
-        phx-click="toggle-mobile-menu"
-        phx-target={@myself}
-      >
-        <.icon name="hero-bars-3" class="h-6 w-6" />
-      </button>
-      <.link navigate="/" class="sidebar-brand">SoundBored</.link>
+    <aside id="studio-sidebar" class="studio-sidebar" phx-hook="Sidebar">
+      <div class="sidebar-header">
+        <.link navigate="/" class="sidebar-brand">SoundBored</.link>
+        <button
+          type="button"
+          class="sidebar-toggle"
+          aria-label="Collapse sidebar"
+          aria-expanded="true"
+          aria-controls="studio-navigation"
+          data-sidebar-toggle
+        >
+          <.icon name="hero-bars-3" class="h-6 w-6" />
+        </button>
+      </div>
       <nav id="studio-navigation" aria-label="Main navigation" class="sidebar-links">
         <.link
           :for={
@@ -45,6 +36,7 @@ defmodule SoundboardWeb.Components.Layouts.Navbar do
           navigate={path}
           aria-current={if @current_path == path, do: "page", else: nil}
           title={label}
+          aria-label={label}
           class={["sidebar-link", @current_path == path && "is-active"]}
         >
           <.icon name={icon} class="h-6 w-6 shrink-0" /><span class="sidebar-label">{label}</span>

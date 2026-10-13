@@ -3,6 +3,9 @@
 The sidebar opens Sounds, Saved moments, Favorites, Stats, and Settings. A fixed
 bottom bar keeps master volume, Stop, and Save last 60 seconds within reach.
 Start capture sits beside Add Sound and Play Random on the Sounds page.
+Use the sidebar toggle to switch between full navigation and an icon rail. Your
+choice is remembered in this browser; content and bottom controls expand with it.
+On phones, expanding the rail opens navigation over the content.
 
 ## Master volume
 

@@ -70,17 +70,22 @@ body {
 .phx-change-loading .search-spinner { display: inline; }
 .phx-change-loading .search-icon { display: none; }
 
-/* Persistent radio desk: a compact rail on phones, full sidebar on tablets. */
-.studio-sidebar { position:fixed; inset:0 auto 0 0; width:220px; z-index:40; padding:24px 16px; background:#111827; color:#d1d5db; border-right:1px solid #374151; display:flex; flex-direction:column; }
-.sidebar-brand { font-size:22px; font-weight:700; color:#fff; margin:0 8px 32px; }
+/* Sidebar and playback controls share the same responsive offset. */
+body { --studio-sidebar-width:220px; }
+body.sidebar-collapsed { --studio-sidebar-width:64px; }
+.studio-sidebar { position:fixed; inset:0 auto 0 0; width:var(--studio-sidebar-width); z-index:40; padding:24px 8px; background:#111827; color:#d1d5db; border-right:1px solid #374151; display:flex; flex-direction:column; }
+.sidebar-header { display:flex; align-items:center; justify-content:space-between; min-height:44px; margin-bottom:24px; }
+.sidebar-brand { font-size:20px; font-weight:700; color:#fff; margin-left:8px; }
 .sidebar-links { display:grid; gap:8px; }
 .sidebar-link { display:flex; align-items:center; gap:12px; min-height:48px; padding:12px; border-radius:8px; }
 .sidebar-link:hover { background:#1f2937; }
 .sidebar-link.is-active { color:#bfdbfe; background:#1e3a5f; }
 .sidebar-presences { margin-top:auto; overflow:auto; padding:16px 8px 100px; }
-.sidebar-toggle { display:none; }
-.studio-main { margin-left:220px; padding-bottom:125px; min-height:100vh; }
-.studio-controls { position:fixed; inset:auto 0 0 220px; z-index:35; display:flex; align-items:center; gap:16px; padding:16px 24px calc(16px + env(safe-area-inset-bottom)); background:#111827; color:#f3f4f6; border-top:1px solid #374151; box-shadow:0 -8px 24px #0002; }
+.sidebar-toggle { display:flex; align-items:center; justify-content:center; width:44px; height:44px; flex-shrink:0; border-radius:6px; }
+.sidebar-toggle:hover { background:#1f2937; }
+.sidebar-collapsed .sidebar-brand,.sidebar-collapsed .sidebar-label,.sidebar-collapsed .sidebar-presences { display:none; }
+.studio-main { margin-left:var(--studio-sidebar-width); padding-bottom:125px; min-height:100vh; }
+.studio-controls { position:fixed; inset:auto 0 0 var(--studio-sidebar-width); z-index:35; display:flex; align-items:center; gap:16px; padding:16px 24px calc(16px + env(safe-area-inset-bottom)); background:#111827; color:#f3f4f6; border-top:1px solid #374151; box-shadow:0 -8px 24px #0002; }
 .master-control { flex:1; max-width:400px; min-width:120px; }
 .master-control label { display:flex; justify-content:space-between; font-size:14px; }
 .master-control input { width:100%; height:44px; accent-color:#60a5fa; }
@@ -96,12 +101,12 @@ body {
 @media (prefers-color-scheme:dark) { .moment-editor { background:#1f2937; border-color:#374151; } .moment-list-item { border-color:#374151; } .moment-list-item[aria-current=true] { background:#1e3a5f; } }
 @media (max-width:1023px) { .capture-status { display:none; } }
 @media (max-width:639px) {
-  .studio-sidebar { width:64px; padding:12px 8px; }
-  .sidebar-brand,.sidebar-label,.sidebar-presences { display:none; }
-  .sidebar-toggle { display:block; height:44px; margin-bottom:20px; }
-  .sidebar-link { padding:12px; }
-  .studio-sidebar.is-open { width:220px; box-shadow:8px 0 30px #0006; }
-  .studio-sidebar.is-open .sidebar-label,.studio-sidebar.is-open .sidebar-brand { display:block; }
+  body { --studio-sidebar-width:64px; }
+  .studio-sidebar { padding:12px 8px; }
+  .studio-sidebar[data-collapsed="false"] { width:220px; box-shadow:8px 0 30px #0006; }
+  .studio-sidebar:not([data-collapsed="false"]) .sidebar-brand,
+  .studio-sidebar:not([data-collapsed="false"]) .sidebar-label,
+  .studio-sidebar:not([data-collapsed="false"]) .sidebar-presences { display:none; }
   .studio-main { margin-left:64px; padding-bottom:170px; }
   .studio-controls { left:64px; gap:8px; padding:12px 12px calc(12px + env(safe-area-inset-bottom)); flex-wrap:wrap; }
   .master-control { flex-basis:100%; max-width:none; }

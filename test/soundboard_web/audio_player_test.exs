@@ -8,6 +8,7 @@ defmodule Soundboard.AudioPlayerTest do
   alias Soundboard.AudioPlayer.State
   alias Soundboard.Discord.Handler.{AutoJoinPolicy, VoicePresence}
   alias Soundboard.Discord.Voice
+  alias Soundboard.PubSubTopics
 
   setup do
     original_state = :sys.get_state(AudioPlayer)
@@ -17,6 +18,19 @@ defmodule Soundboard.AudioPlayerTest do
     end)
 
     :ok
+  end
+
+  test "stop clears queued playback without an error when Discord is disconnected" do
+    PubSubTopics.subscribe_playback()
+
+    :sys.replace_state(AudioPlayer, fn _ ->
+      %State{voice_channel: nil, pending_request: %{sound_name: "queued.wav"}}
+    end)
+
+    AudioPlayer.stop_sound()
+    assert {:ok, nil} = AudioPlayer.current_voice_channel()
+    assert :sys.get_state(AudioPlayer).pending_request == nil
+    refute_receive {:error, _}, 20
   end
 
   test "continues voice maintenance when playback status is unavailable" do

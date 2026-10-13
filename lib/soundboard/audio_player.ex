@@ -129,8 +129,7 @@ defmodule Soundboard.AudioPlayer do
   end
 
   def handle_cast(:stop_sound, state) do
-    Notifier.error("Bot is not connected to a voice channel")
-    {:noreply, state}
+    {:noreply, PlaybackQueue.clear_all(state)}
   end
 
   def handle_cast({:playback_finished, guild_id}, state) do

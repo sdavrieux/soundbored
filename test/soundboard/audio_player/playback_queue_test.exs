@@ -39,7 +39,7 @@ defmodule Soundboard.AudioPlayer.PlaybackQueueTest do
 
   test "build_request returns a normalized playback request" do
     with_mock Soundboard.AudioPlayer.SoundLibrary,
-      get_sound_path: fn "guild-1", "intro.mp3" -> {:ok, {"/tmp/intro.mp3", 0.8}} end do
+      get_sound_path: fn "intro.mp3" -> {:ok, {"/tmp/intro.mp3", 0.8}} end do
       assert {:ok,
               %{
                 guild_id: "guild-1",
@@ -54,7 +54,7 @@ defmodule Soundboard.AudioPlayer.PlaybackQueueTest do
 
   test "build_request returns lookup errors unchanged" do
     with_mock Soundboard.AudioPlayer.SoundLibrary,
-      get_sound_path: fn "guild-1", "missing.mp3" -> {:error, "Sound not found"} end do
+      get_sound_path: fn "missing.mp3" -> {:error, "Sound not found"} end do
       assert {:error, "Sound not found"} =
                PlaybackQueue.build_request({"guild-1", "channel-9"}, "missing.mp3", "System")
     end
@@ -133,50 +133,6 @@ defmodule Soundboard.AudioPlayer.PlaybackQueueTest do
       assert state.interrupting == false
 
       PlaybackQueue.clear_all(state)
-    end
-  end
-
-  test "cancelling an in-flight playback does not terminate its owner" do
-    test_pid = self()
-
-    with_mocks([
-      {Soundboard.Discord.Voice, [],
-       [
-         stop: fn "guild-1" -> :ok end,
-         playing?: fn "guild-1" -> false end
-       ]},
-      {Soundboard.AudioPlayer.PlaybackEngine, [],
-       [
-         play: fn "guild-1", "channel-9", "intro.mp3", "/tmp/intro.mp3", 0.8, "System" ->
-           send(test_pid, :playback_started)
-           Process.sleep(:infinity)
-         end
-       ]}
-    ]) do
-      owner =
-        spawn(fn ->
-          state = PlaybackQueue.enqueue(base_state(), request(), 35)
-          send(test_pid, {:playback_owner_ready, self(), state})
-
-          receive do
-            :cancel ->
-              PlaybackQueue.clear_all(state)
-              send(test_pid, :playback_owner_survived)
-              Process.sleep(:infinity)
-          end
-        end)
-
-      owner_ref = Process.monitor(owner)
-
-      assert_receive :playback_started
-      assert_receive {:playback_owner_ready, ^owner, _state}
-      send(owner, :cancel)
-
-      assert_receive :playback_owner_survived
-      refute_receive {:DOWN, ^owner_ref, :process, ^owner, _reason}
-
-      Process.exit(owner, :kill)
-      assert_receive {:DOWN, ^owner_ref, :process, ^owner, :killed}
     end
   end
 

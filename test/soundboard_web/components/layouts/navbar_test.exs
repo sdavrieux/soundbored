@@ -7,7 +7,8 @@ defmodule SoundboardWeb.Components.Layouts.NavbarTest do
 
   test "renders public navigation links" do
     html =
-      render_component(&Navbar.navbar/1,
+      render_component(Navbar,
+        id: "navbar",
         current_path: "/",
         current_user: nil,
         presences: %{}
@@ -17,12 +18,13 @@ defmodule SoundboardWeb.Components.Layouts.NavbarTest do
     assert html =~ "Sounds"
     assert html =~ "Favorites"
     assert html =~ "Stats"
-    refute html =~ "Settings"
+    assert html =~ "Saved moments"
   end
 
   test "renders settings link and deduplicated presences for authenticated users" do
     html =
-      render_component(&Navbar.navbar/1,
+      render_component(Navbar,
+        id: "navbar",
         current_path: "/settings",
         current_user: %{id: 1, username: "owner"},
         presences: %{
@@ -37,6 +39,6 @@ defmodule SoundboardWeb.Components.Layouts.NavbarTest do
     assert html =~ "user-bob"
 
     # Duplicated presence entries for the same user should only render once per menu section.
-    assert Enum.count(Regex.scan(~r/user-alice/, html)) == 2
+    assert length(Regex.scan(~r/user-alice/, html)) == 1
   end
 end

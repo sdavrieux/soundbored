@@ -2,6 +2,12 @@
 .git*
 test
 .env*
+.*.env
+.*.overrides.env
+*.db*
+priv/recordings
+deps
+_build
 *.md
 coveralls.json
 docker-compose.yml

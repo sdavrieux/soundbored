@@ -44,13 +44,12 @@ defmodule SoundboardWeb.SettingsLiveTest do
   end
 
   test "shows persisted tokens after reload", %{conn: conn, user: user} do
-    {:ok, _raw, _token} = ApiTokens.generate_token(user, %{label: "Saved token"})
+    {:ok, raw, _token} = ApiTokens.generate_token(user, %{label: "Saved token"})
 
     {:ok, _view, html} = live(conn, "/settings")
 
-    # Token label is always visible; raw value is not shown after the creation session
     assert html =~ "Saved token"
-    assert html =~ "Token values are shown"
+    assert html =~ raw
   end
 
   test "shows upload API documentation", %{conn: conn} do

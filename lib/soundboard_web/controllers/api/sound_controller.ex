@@ -1,15 +1,12 @@
 defmodule SoundboardWeb.API.SoundController do
   use SoundboardWeb, :controller
 
-  import Ecto.Query, only: [where: 2]
-
   alias Soundboard.{Repo, Sound, Sounds}
 
   def index(conn, _params) do
     sounds =
       Sound
       |> Sound.with_tags()
-      |> where(guild_id: ^guild_id(conn))
       |> Repo.all()
       |> Enum.map(&format_sound(&1, conn.assigns[:current_user]))
 
@@ -18,7 +15,7 @@ defmodule SoundboardWeb.API.SoundController do
 
   def create(conn, params) do
     with {:ok, user} <- require_upload_user(conn),
-         {:ok, sound} <- create_sound(user, params, guild_id(conn)) do
+         {:ok, sound} <- create_sound(user, params) do
       conn
       |> put_status(:created)
       |> json(%{data: format_sound(sound, user)})
@@ -36,7 +33,7 @@ defmodule SoundboardWeb.API.SoundController do
   end
 
   def play(conn, %{"id" => id}) do
-    case Repo.get_by(Sound, id: id, guild_id: guild_id(conn)) do
+    case Repo.get(Sound, id) do
       nil ->
         conn
         |> put_status(:not_found)
@@ -45,7 +42,7 @@ defmodule SoundboardWeb.API.SoundController do
       sound ->
         case require_play_user(conn) do
           {:ok, user} ->
-            Soundboard.AudioPlayer.play_sound(sound.filename, user, guild_id(conn))
+            Soundboard.AudioPlayer.play_sound(sound.filename, user)
 
             conn
             |> put_status(:accepted)
@@ -67,7 +64,7 @@ defmodule SoundboardWeb.API.SoundController do
   end
 
   def stop(conn, _params) do
-    Soundboard.AudioPlayer.stop_sound(guild_id(conn))
+    Soundboard.AudioPlayer.stop_sound()
 
     conn
     |> put_status(:accepted)
@@ -79,17 +76,10 @@ defmodule SoundboardWeb.API.SoundController do
     })
   end
 
-  defp create_sound(user, params, guild_id) do
+  defp create_sound(user, params) do
     user
-    |> Sounds.new_create_request(Map.put(params, "guild_id", guild_id))
+    |> Sounds.new_create_request(params)
     |> Sounds.create_sound()
-  end
-
-  defp guild_id(conn) do
-    case conn.assigns[:current_guild_id] do
-      nil -> Soundboard.Tenants.default_guild_id()
-      guild_id -> guild_id
-    end
   end
 
   defp require_upload_user(conn) do

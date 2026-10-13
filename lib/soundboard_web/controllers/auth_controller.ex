@@ -21,15 +21,18 @@ defmodule SoundboardWeb.AuthController do
 
   def callback(%{assigns: %{ueberauth_auth: auth}} = conn, _params) do
     if RoleChecker.authorized?(auth.uid) do
-      user_params =
-        User.discord_params(auth.uid, auth.info.nickname || auth.info.name, auth.info.image)
+      user_params = %{
+        discord_id: auth.uid,
+        username: auth.info.nickname || auth.info.name,
+        avatar: auth.info.image
+      }
 
       case find_or_create_user(user_params) do
         {:ok, user} ->
           conn
           |> put_session(:user_id, user.id)
           |> put_session(:roles_verified_at, System.system_time(:second))
-          |> redirect_after_sign_in()
+          |> redirect(to: "/")
 
         {:error, _reason} ->
           conn
@@ -47,48 +50,6 @@ defmodule SoundboardWeb.AuthController do
     conn
     |> put_flash(:error, "Failed to authenticate")
     |> redirect(to: "/")
-  end
-
-  # SB-2 slug claim: a signed-out visitor who hit /g/:slug stashed the desired
-  # slug in the session; land them on it after sign-in.
-  defp redirect_after_sign_in(conn) do
-    case get_session(conn, :pending_slug) do
-      nil ->
-        redirect(conn, to: "/")
-
-      slug ->
-        slug = if slug =~ ~r/^[A-Za-z0-9-]+$/, do: slug, else: ""
-
-        conn
-        |> delete_session(:pending_slug)
-        |> redirect(to: if(slug == "", do: "/", else: "/g/#{slug}"))
-    end
-  end
-
-  @doc """
-  Test-only sign-in for Playwright e2e runs. The route is registered only when
-  `:enable_test_login` is configured, which is dev/test — never prod.
-  """
-  def test_login(conn, params) do
-    user_params =
-      User.discord_params(
-        Map.get(params, "discord_id", "000000000000000001"),
-        Map.get(params, "username", "e2e-user"),
-        Map.get(params, "avatar")
-      )
-
-    case find_or_create_user(user_params) do
-      {:ok, user} ->
-        conn
-        |> put_session(:user_id, user.id)
-        |> put_session(:roles_verified_at, System.system_time(:second))
-        |> redirect(to: "/guilds")
-
-      {:error, _reason} ->
-        conn
-        |> put_flash(:error, "Error signing in")
-        |> redirect(to: "/")
-    end
   end
 
   defp find_or_create_user(%{discord_id: discord_id} = params) do

@@ -68,24 +68,40 @@ const percentToGain = (percent, maxPercent = MAX_VOLUME_PERCENT_DEFAULT) => {
   return roundTo(Math.min(boosted, BOOST_CAP))
 }
 
+let masterGain = 1
+const browserAudio = new Set()
 const setElementGain = (audio, gain) => {
-  if (!audio) {
-    return
-  }
-
-  const clampedGain = clamp(gain, 0, BOOST_CAP)
-  const elementVolume = Math.min(clampedGain, 1)
-
-  try {
-    audio.volume = elementVolume
-  } catch (_err) {
-    audio.volume = 1
-  }
-
+  if (!audio) return
+  audio.__clipGain = clamp(gain, 0, BOOST_CAP)
+  browserAudio.add(audio)
+  const combined = audio.__clipGain * masterGain
   if (audio.__gainNode) {
-    audio.__gainNode.gain.value = clampedGain > 1 ? clampedGain : 1
+    audio.volume = 1
+    audio.__gainNode.gain.setValueAtTime(combined, audio.__context.currentTime)
+  } else {
+    audio.volume = Math.min(combined, 1)
   }
 }
+const updateMaster = (percent) => {
+  masterGain = clamp(Number(percent), 0, 100) / 100
+  for (const audio of browserAudio) setElementGain(audio, audio.__clipGain ?? 1)
+}
+const connectAudio = async (audio, context) => {
+  if (!context) return
+  if (!audio.__gainNode) {
+    const source = context.createMediaElementSource(audio)
+    const gain = context.createGain()
+    source.connect(gain).connect(context.destination)
+    audio.__gainNode = gain
+    audio.__context = context
+    audio.__source = source
+  }
+  if (context.state === "suspended") await context.resume()
+}
+window.addEventListener("phx:master-volume", (event) => updateMaster(event.detail.volume))
+window.addEventListener("phx:stop-all-sounds", () => {
+  for (const audio of browserAudio) { audio.pause(); audio.currentTime = 0 }
+})
 
 let activeLocalPlayer = null
 
@@ -98,6 +114,109 @@ const stopActiveLocalPlayer = () => {
 window.addEventListener("phx:stop-all-sounds", stopActiveLocalPlayer)
 
 let Hooks = {}
+Hooks.Sidebar = {
+  mounted() {
+    this.button = this.el.querySelector("[data-sidebar-toggle]")
+    this.media = window.matchMedia("(max-width: 639px)")
+    try { this.preference = localStorage.getItem("soundboard.sidebar.collapsed") } catch (_err) {}
+    this.collapsed = this.preference == null ? this.media.matches : this.preference === "true"
+    this.apply = () => {
+      document.body.classList.toggle("sidebar-collapsed", this.collapsed)
+      this.el.dataset.collapsed = String(this.collapsed)
+      this.button.setAttribute("aria-expanded", String(!this.collapsed))
+      this.button.setAttribute("aria-label", this.collapsed ? "Expand sidebar" : "Collapse sidebar")
+    }
+    this.toggle = () => {
+      this.collapsed = !this.collapsed
+      this.preference = String(this.collapsed)
+      try { localStorage.setItem("soundboard.sidebar.collapsed", this.preference) } catch (_err) {}
+      this.apply()
+    }
+    this.resize = () => { if (this.preference == null) { this.collapsed = this.media.matches; this.apply() } }
+    this.button.addEventListener("click", this.toggle)
+    this.media.addEventListener("change", this.resize)
+    this.apply()
+  },
+  updated() { this.apply() },
+  destroyed() {
+    this.button.removeEventListener("click", this.toggle)
+    this.media.removeEventListener("change", this.resize)
+  }
+}
+
+Hooks.MasterVolume = {
+  mounted() {
+    this.editing = false
+    updateMaster(this.el.value)
+    this.send = () => this.pushEvent("set_master_volume", {volume: this.el.value})
+    this.onInput = () => {
+      this.editing = true
+      updateMaster(this.el.value)
+      document.getElementById("master-volume-value").textContent = `${this.el.value}%`
+      clearTimeout(this.timer)
+      this.timer = setTimeout(this.send, 80)
+    }
+    this.onChange = () => { clearTimeout(this.timer); this.editing = false; this.send() }
+    this.el.addEventListener("input", this.onInput)
+    this.el.addEventListener("change", this.onChange)
+  },
+  updated() {
+    if (!this.editing) { this.el.value = this.el.getAttribute("value"); updateMaster(this.el.value) }
+  },
+  destroyed() {
+    clearTimeout(this.timer)
+    this.el.removeEventListener("input", this.onInput)
+    this.el.removeEventListener("change", this.onChange)
+  }
+}
+Hooks.MomentEditor = {
+  mounted() {
+    this.audio = this.el.querySelector("audio")
+    const Ctor = getAudioContextCtor()
+    this.context = Ctor ? new Ctor() : null
+    this.ranges = [...this.el.querySelectorAll("[data-range]")]
+    this.fields = [...this.el.querySelectorAll("[data-bound]")]
+    this.onRange = (event) => {
+      const field = this.fields.find(field => field.dataset.bound === event.target.dataset.range)
+      field.value = event.target.value
+      field.dispatchEvent(new Event("input", {bubbles: true}))
+    }
+    this.ranges.forEach(range => range.addEventListener("input", this.onRange))
+    this.onPlay = async () => {
+      await connectAudio(this.audio, this.context)
+      setElementGain(this.audio, 1)
+    }
+    this.onPreview = async () => {
+      await this.onPlay()
+      const start = Number(this.fields[0].value), stop = Number(this.fields[1].value)
+      if (!(start >= 0 && stop > start && stop <= Number(this.el.dataset.duration))) return
+      this.previewEnd = stop
+      this.audio.currentTime = start
+      await this.audio.play()
+    }
+    this.onTime = () => { if (this.previewEnd != null && this.audio.currentTime >= this.previewEnd) { this.audio.pause(); this.previewEnd = null } }
+    this.onPause = () => { this.previewEnd = null }
+    this.preview = this.el.querySelector("[data-preview]")
+    this.preview.addEventListener("click", this.onPreview)
+    this.audio.addEventListener("play", this.onPlay)
+    this.audio.addEventListener("timeupdate", this.onTime)
+    this.audio.addEventListener("pause", this.onPause)
+    this.updated()
+  },
+  updated() {
+    this.ranges?.forEach(range => { range.value = this.fields.find(field => field.dataset.bound === range.dataset.range).value })
+  },
+  destroyed() {
+    this.audio.pause()
+    this.preview.removeEventListener("click", this.onPreview)
+    this.ranges.forEach(range => range.removeEventListener("input", this.onRange))
+    this.audio.removeEventListener("play", this.onPlay)
+    this.audio.removeEventListener("timeupdate", this.onTime)
+    this.audio.removeEventListener("pause", this.onPause)
+    browserAudio.delete(this.audio)
+    this.context?.close()
+  }
+}
 Hooks.LocalPlayer = {
   mounted() {
     this.audio = null
@@ -114,6 +233,7 @@ Hooks.LocalPlayer = {
   destroyed() {
     this.el.removeEventListener("click", this.handleClick)
     this.stopPlayback()
+    this.audioContext?.close()
   },
   readGain() {
     const raw = parseFloat(this.el.dataset.volume)
@@ -144,6 +264,7 @@ Hooks.LocalPlayer = {
     const audio = new Audio()
 
     if (sourceType === "url" && url) {
+      audio.crossOrigin = "anonymous"
       audio.src = url
     } else if (filename) {
       audio.src = `/uploads/${filename}`
@@ -168,63 +289,17 @@ Hooks.LocalPlayer = {
     }
   },
   async configureGain(targetGain) {
-    if (!this.audio) {
-      return
-    }
-
-    this.releaseBoost()
-
-    const normalized = clamp(targetGain, 0, BOOST_CAP)
+    if (!this.audio) return
     const ContextCtor = getAudioContextCtor()
-
-    if (!ContextCtor || normalized <= 1) {
-      setElementGain(this.audio, normalized)
-      return
-    }
-
-    if (!this.audioContext) {
-      this.audioContext = new ContextCtor()
-    }
-
-    if (this.audioContext.state === "suspended") {
-      try {
-        await this.audioContext.resume()
-      } catch (_err) {}
-    }
-
-    try {
-      const source = this.audioContext.createMediaElementSource(this.audio)
-      const gainNode = this.audioContext.createGain()
-      gainNode.gain.value = normalized
-      source.connect(gainNode).connect(this.audioContext.destination)
-      this.audio.__gainNode = gainNode
-      setElementGain(this.audio, normalized)
-
-      this.cleanup = () => {
-        try {
-          source.disconnect()
-        } catch (_err) {}
-        try {
-          gainNode.disconnect()
-        } catch (_err) {}
-        if (this.audio && this.audio.__gainNode === gainNode) {
-          delete this.audio.__gainNode
-        }
-      }
-    } catch (error) {
-      console.warn("Unable to apply playback boost", error)
-      setElementGain(this.audio, Math.min(normalized, 1))
-    }
+    if (!this.audioContext && ContextCtor) this.audioContext = new ContextCtor()
+    try { await connectAudio(this.audio, this.audioContext) } catch (_err) {}
+    setElementGain(this.audio, targetGain)
   },
   releaseBoost() {
-    if (typeof this.cleanup === "function") {
-      try {
-        this.cleanup()
-      } catch (_err) {}
-    }
-    this.cleanup = null
     if (this.audio) {
-      delete this.audio.__gainNode
+      browserAudio.delete(this.audio)
+      this.audio.__source?.disconnect()
+      this.audio.__gainNode?.disconnect()
     }
   },
   stopPlayback() {
@@ -433,6 +508,7 @@ Hooks.VolumeControl = {
 
     if (!this.previewAudio) {
       this.previewAudio = new Audio()
+      this.previewAudio.crossOrigin = "anonymous"
       this.previewAudio.addEventListener("ended", () => this.stopPreview())
       this.previewAudio.addEventListener("error", () => this.stopPreview())
     }
@@ -466,64 +542,19 @@ Hooks.VolumeControl = {
     await this.ensurePreviewGraph(gain)
     this.applyPreviewGain(gain)
   },
-  async ensurePreviewGraph(targetGain) {
-    if (!this.previewAudio) {
-      return
-    }
-
-    const needsBoost = targetGain > 1
+  async ensurePreviewGraph() {
+    if (!this.previewAudio) return
     const ContextCtor = getAudioContextCtor()
-
-    if (!needsBoost || !ContextCtor) {
-      if (this.previewGain) {
-        this.previewGain.gain.value = 1
-      }
-      return
-    }
-
-    if (!this.previewContext) {
-      this.previewContext = new ContextCtor()
-    }
-
-    if (this.previewContext.state === "suspended") {
-      try {
-        await this.previewContext.resume()
-      } catch (_err) {}
-    }
-
-    if (!this.previewSource) {
-      try {
-        this.previewSource = this.previewContext.createMediaElementSource(this.previewAudio)
-      } catch (error) {
-        console.warn("Preview gain setup failed", error)
-        this.previewSource = null
-        this.previewGain = null
-        return
-      }
-    }
-
-    if (!this.previewGain) {
-      this.previewGain = this.previewContext.createGain()
-      this.previewSource.connect(this.previewGain).connect(this.previewContext.destination)
-    }
+    if (!ContextCtor) return
+    if (!this.previewContext) this.previewContext = new ContextCtor()
+    try {
+      await connectAudio(this.previewAudio, this.previewContext)
+      this.previewSource = this.previewAudio.__source
+      this.previewGain = this.previewAudio.__gainNode
+    } catch (_err) {}
   },
   applyPreviewGain(targetGain) {
-    if (!this.previewAudio) {
-      return
-    }
-
-    const base = clamp(targetGain, 0, BOOST_CAP)
-    const volume = Math.min(base, 1)
-
-    try {
-      this.previewAudio.volume = volume
-    } catch (_err) {
-      this.previewAudio.volume = 1
-    }
-
-    if (this.previewGain) {
-      this.previewGain.gain.value = base > 1 ? base : 1
-    }
+    setElementGain(this.previewAudio, targetGain)
   },
   getPreviewSource() {
     if (this.previewKind === "local-upload" && this.fileInputId) {
@@ -562,6 +593,7 @@ Hooks.VolumeControl = {
   },
   stopPreview(forceRevoke = false) {
     if (this.previewAudio) {
+      browserAudio.delete(this.previewAudio)
       try {
         this.previewAudio.pause()
         this.previewAudio.currentTime = 0
@@ -583,25 +615,6 @@ Hooks.VolumeControl = {
 
     this.previewButton.textContent = isPlaying ? "Stop Preview" : this.previewLabel
     this.previewButton.dataset.previewState = isPlaying ? "playing" : "stopped"
-  }
-}
-
-Hooks.SearchBackspace = {
-  mounted() {
-    this.handleKeydown = (e) => {
-      if (e.key !== "Backspace") return
-      // Only act when the input is truly empty (client-side check — the
-      // server's debounced search_query can lag behind the DOM value).
-      if (this.el.value !== "") return
-      // Only clear when a tag chip is actually rendered.
-      const chip = document.querySelector("[phx-click='clear_tag_filters']")
-      if (!chip) return
-      this.pushEvent("clear_tag_filters", {})
-    }
-    this.el.addEventListener("keydown", this.handleKeydown)
-  },
-  destroyed() {
-    this.el.removeEventListener("keydown", this.handleKeydown)
   }
 }
 

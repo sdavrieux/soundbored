@@ -15,7 +15,6 @@ defmodule Soundboard.Sounds.Uploads.Normalizer do
 
         build_normalized_params(%{
           user: user,
-          guild_id: request.guild_id || Soundboard.Tenants.default_guild_id(),
           source_type: source_type,
           name: name,
           url: normalize_url(request.url),
@@ -34,7 +33,6 @@ defmodule Soundboard.Sounds.Uploads.Normalizer do
 
   defp build_normalized_params(%{
          user: %Soundboard.Accounts.User{} = user,
-         guild_id: guild_id,
          source_type: source_type,
          name: name,
          url: url,
@@ -51,7 +49,6 @@ defmodule Soundboard.Sounds.Uploads.Normalizer do
       {:ok,
        %{
          user: user,
-         guild_id: guild_id,
          source_type: source_type,
          name: name,
          url: url,
@@ -63,6 +60,10 @@ defmodule Soundboard.Sounds.Uploads.Normalizer do
          upload: upload
        }}
     end
+  end
+
+  defp build_normalized_params(_params) do
+    {:error, add_error(change(%Sound{}), :user_id, "can't be blank")}
   end
 
   defp normalize_default_volume(value), do: Volume.normalize_percent(value, 100)

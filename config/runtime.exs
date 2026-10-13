@@ -10,6 +10,10 @@ source!([
   System.get_env()
 ])
 
+config :soundboard,
+       :recordings_dir,
+       env!("SOUNDBOARD_RECORDINGS_DIR", :string, Path.expand("priv/recordings"))
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
@@ -62,8 +66,6 @@ if config_env() == :dev do
       _ -> {127, 0, 0, 1}
     end
 
-  # Dev talks straight to the server (no reverse proxy), so the advertised
-  # URL carries the actual bind port (4000 by default).
   endpoint_overrides = [
     url: [host: host, port: port, scheme: scheme],
     http: [ip: bind_ip, port: port]
@@ -107,43 +109,24 @@ if config_env() == :dev do
     ffmpeg_available: ffmpeg_available,
     required_guild_id: required_guild_id,
     required_role_ids: required_role_ids,
-    role_recheck_interval_seconds: role_recheck_interval_seconds,
-    default_guild_id: env!("SOUNDBOARD_DEFAULT_GUILD_ID", :string, nil),
-    tenant_base_host: env!("TENANT_BASE_HOST", :string, nil)
+    role_recheck_interval_seconds: role_recheck_interval_seconds
 
   config :eda,
     token: discord_token,
     dave: eda_dave
 end
 
-# Stripe billing applies in every environment; billing stays dormant unless
-# STRIPE_SECRET_KEY is set (see Soundboard.Billing.configured?/0).
-config :soundboard, Soundboard.Billing,
-  secret_key: env!("STRIPE_SECRET_KEY", :string, nil),
-  webhook_secret: env!("STRIPE_WEBHOOK_SECRET", :string, nil),
-  price_pro_monthly: env!("SOUNDBORED_STRIPE_PRICE_PRO_MONTHLY", :string, nil),
-  price_pro_yearly: env!("SOUNDBORED_STRIPE_PRICE_PRO_YEARLY", :string, nil),
-  price_studio_monthly: env!("SOUNDBORED_STRIPE_PRICE_STUDIO_MONTHLY", :string, nil),
-  price_studio_yearly: env!("SOUNDBORED_STRIPE_PRICE_STUDIO_YEARLY", :string, nil)
-
 # Allow build tooling to opt-out to avoid requiring secrets during image builds.
 if config_env() == :prod and is_nil(env!("SKIP_RUNTIME_CONFIG", :string, nil)) do
   port = env!("PORT", :integer, 4000)
 
-  if max_bytes = env!("MAX_UPLOAD_BYTES", :integer, nil) do
-    config :soundboard, max_upload_bytes: max_bytes
-  end
-
-  database_path = "/app/priv/db/soundboard_prod.db"
+  # Replace the database_url section with SQLite configuration
+  database_path = Path.join(:code.priv_dir(:soundboard), "static/uploads/soundboard_prod.db")
 
   config :soundboard, Soundboard.Repo,
     database: database_path,
     adapter: Ecto.Adapters.SQLite3,
-    pool_size: env!("POOL_SIZE", :integer, 10),
-    # WAL: concurrent readers while the single writer works; busy_timeout queues
-    # writers instead of erroring with "database is locked" under contention.
-    journal_mode: :wal,
-    busy_timeout: 5_000
+    pool_size: env!("POOL_SIZE", :integer, 10)
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   secret_key_base =
@@ -179,14 +162,12 @@ if config_env() == :prod and is_nil(env!("SKIP_RUNTIME_CONFIG", :string, nil)) d
 
   # Configure endpoint first
   config :soundboard, SoundboardWeb.Endpoint,
-    # The advertised URL must not carry the internal bind port. Phoenix falls
-    # back to the listener port when url[:port] is nil, so publish the explicit
-    # scheme default (443/80), which renders without a port suffix (#79). A
-    # nonstandard public port goes in PHX_HOST itself.
+    # In prod, PHX_HOST represents the externally visible host. Do not append
+    # the app's internal listen port unless the host itself already includes one.
     url: [
       scheme: scheme,
       host: host,
-      port: if(scheme == "https", do: 443, else: 80)
+      port: nil
     ],
     http: [
       ip: {0, 0, 0, 0},
@@ -249,9 +230,7 @@ if config_env() == :prod and is_nil(env!("SKIP_RUNTIME_CONFIG", :string, nil)) d
     ffmpeg_available: ffmpeg_available,
     required_guild_id: required_guild_id,
     required_role_ids: required_role_ids,
-    role_recheck_interval_seconds: role_recheck_interval_seconds,
-    default_guild_id: env!("SOUNDBOARD_DEFAULT_GUILD_ID", :string, nil),
-    tenant_base_host: env!("TENANT_BASE_HOST", :string, nil)
+    role_recheck_interval_seconds: role_recheck_interval_seconds
 
   config :eda,
     token: discord_token,

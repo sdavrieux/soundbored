@@ -8,23 +8,19 @@ defmodule Soundboard.Sounds.Uploads.Source do
 
   alias Soundboard.{Repo, Sound, UploadsPath}
 
-  defstruct [:filename, :storage_key, :source_type, :url, :copied_file_path]
-
   @allowed_extensions ~w(.mp3 .wav .ogg .m4a)
-  @allowed_audio_mime_types ~w(audio/mpeg audio/wav audio/ogg audio/mp4 audio/flac audio/aiff)
 
-  @spec prepare(map(), :validate | :create) ::
-          {:ok, %__MODULE__{}} | {:error, Ecto.Changeset.t()}
+  @spec prepare(map(), :validate | :create) :: {:ok, map()} | {:error, Ecto.Changeset.t()}
   def prepare(%{source_type: "url"} = params, _mode) do
     with {:ok, url} <- validate_url(params.url),
          filename <- params.name <> url_file_extension(url),
-         :ok <- validate_destination_filename(filename, Map.get(params, :guild_id)) do
+         :ok <- validate_destination_filename(filename) do
       {:ok,
-       %__MODULE__{
+       %{
          filename: filename,
-         storage_key: Ecto.UUID.generate() <> url_file_extension(url),
          source_type: "url",
-         url: url
+         url: url,
+         copied_file_path: nil
        }}
     end
   end
@@ -33,12 +29,13 @@ defmodule Soundboard.Sounds.Uploads.Source do
     with {:ok, upload} <- validate_local_upload(params.upload, :validate),
          {:ok, ext} <- validate_local_extension(upload.filename),
          filename <- params.name <> ext,
-         :ok <- validate_destination_filename(filename, Map.get(params, :guild_id)) do
+         :ok <- validate_destination_filename(filename) do
       {:ok,
-       %__MODULE__{
+       %{
          filename: filename,
-         storage_key: Ecto.UUID.generate() <> ext,
-         source_type: "local"
+         source_type: "local",
+         url: nil,
+         copied_file_path: nil
        }}
     end
   end
@@ -47,15 +44,13 @@ defmodule Soundboard.Sounds.Uploads.Source do
     with {:ok, upload} <- validate_local_upload(params.upload, :create),
          {:ok, ext} <- validate_local_extension(upload.filename),
          filename <- params.name <> ext,
-         :ok <- validate_destination_filename(filename, Map.get(params, :guild_id)),
-         :ok <- validate_magic_bytes(upload.path),
-         storage_key <- Ecto.UUID.generate() <> ext,
-         {:ok, copied_file_path} <- copy_local_file(upload.path, storage_key) do
+         :ok <- validate_destination_filename(filename),
+         {:ok, copied_file_path} <- copy_local_file(upload.path, filename) do
       {:ok,
-       %__MODULE__{
+       %{
          filename: filename,
-         storage_key: storage_key,
          source_type: "local",
+         url: nil,
          copied_file_path: copied_file_path
        }}
     end
@@ -114,7 +109,7 @@ defmodule Soundboard.Sounds.Uploads.Source do
   defp validate_local_extension(filename) do
     ext = filename |> Path.extname() |> String.downcase()
 
-    if allowed_extension?(ext) do
+    if ext in @allowed_extensions do
       {:ok, ext}
     else
       {:error,
@@ -126,27 +121,9 @@ defmodule Soundboard.Sounds.Uploads.Source do
     end
   end
 
-  defp validate_magic_bytes(path) do
-    case MagicBytes.from_path(path) do
-      {:ok, mime} when mime in @allowed_audio_mime_types ->
-        :ok
-
-      {:ok, _mime} ->
-        {:error,
-         add_error(
-           change(%Sound{}),
-           :file,
-           "Invalid file type. Please upload an MP3, WAV, OGG, or M4A file."
-         )}
-
-      {:error, _} ->
-        {:error, add_error(change(%Sound{}), :file, "Could not read uploaded file")}
-    end
-  end
-
-  defp copy_local_file(src_path, storage_key) do
+  defp copy_local_file(src_path, filename) do
     uploads_dir = UploadsPath.dir()
-    dest_path = UploadsPath.file_path(storage_key)
+    dest_path = UploadsPath.file_path(filename)
 
     with :ok <- ensure_uploads_dir(uploads_dir),
          :ok <- File.cp(src_path, dest_path) do
@@ -164,19 +141,18 @@ defmodule Soundboard.Sounds.Uploads.Source do
     end
   end
 
-  defp validate_destination_filename(filename, guild_id) do
-    if filename_taken?(filename, guild_id) do
+  defp validate_destination_filename(filename) do
+    dest_path = UploadsPath.file_path(filename)
+
+    if filename_taken?(filename) or File.exists?(dest_path) do
       {:error, add_error(change(%Sound{}), :filename, "has already been taken")}
     else
       :ok
     end
   end
 
-  defp filename_taken?(filename, guild_id) do
-    from(s in Sound,
-      where:
-        s.filename == ^filename and s.guild_id == ^Soundboard.Tenants.scope_guild_id(guild_id)
-    )
+  defp filename_taken?(filename) do
+    from(s in Sound, where: s.filename == ^filename)
     |> Repo.exists?()
   end
 
@@ -190,10 +166,10 @@ defmodule Soundboard.Sounds.Uploads.Source do
         path -> String.downcase(Path.extname(path || ""))
       end
 
-    if allowed_extension?(ext), do: ext, else: ""
+    if ext in @allowed_extensions, do: ext, else: ""
   end
 
-  defp allowed_extension?(ext), do: Enum.member?(@allowed_extensions, ext)
+  defp url_file_extension(_), do: ""
 
   defp blank?(value), do: value in [nil, ""]
 end

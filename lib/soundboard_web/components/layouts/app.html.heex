@@ -1,15 +1,15 @@
-<header class="h-16">
-  <SoundboardWeb.Components.Layouts.Navbar.navbar
-    current_user={@current_user}
-    current_path={@current_path}
-    presences={@presences}
-    app_unlocked={assigns[:app_unlocked] != false}
-  />
-</header>
-
-<main class="">
-  <div>
-    <.flash_group flash={@flash} />
-    {@inner_content}
-  </div>
+<.live_component
+  module={SoundboardWeb.Components.Layouts.Navbar}
+  id="navbar"
+  current_user={@current_user}
+  current_path={@current_path}
+  presences={@presences}
+/>
+<main class="studio-main">
+  <.flash_group flash={@flash} />
+  {@inner_content}
 </main>
+<SoundboardWeb.Components.Soundboard.RadioDesk.radio_desk
+  volume={@studio_volume}
+  capture={@studio_capture}
+/>

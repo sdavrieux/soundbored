@@ -64,16 +64,11 @@ TODO
 
 .env.local
 
-# SQLite database files
-/priv/db/
-priv/bak
-priv/video_sessions/
-
-# Local env with real secrets (never commit)
-.env.onboarding
-
-# Playwright e2e
-e2e/node_modules/
-e2e/test-results/
-e2e/playwright-report/
-e2e/.playwright-mcp/
+# Local configuration, databases and captured conversations must stay private.
+.env.*
+.*.env
+.*.overrides.env
+*.db
+*.db-shm
+*.db-wal
+/priv/recordings/

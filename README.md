@@ -26,14 +26,7 @@ Install the cross-platform CLI with `npm i -g soundbored` for quick automation. 
    ```
 2. Run the published container:
    ```bash
-   docker run -d \
-     --name soundbored \
-     --restart unless-stopped \
-     -p 4000:4000 \
-     --env-file ./.env \
-     --mount source=soundbored_uploads,target=/app/priv/static/uploads \
-     --mount source=soundbored_db,target=/app/priv/db \
-     christom/soundbored:latest
+   docker run -d -p 4000:4000 --env-file ./.env christom/soundbored
    ```
 3. Visit http://localhost:4000, invite the bot, and trigger your first sound.
 
@@ -79,54 +72,23 @@ All available keys live in `.env.example`. Configure the ones that match your se
 | `AUTO_JOIN` | optional | Voice join mode. `play` (default) — bot joins when you play a sound. `presence` — bot follows users into channels. `false` — manual `!join` only. |
 | `VOICE_IDLE_TIMEOUT_SECONDS` | optional | Seconds of inactivity before the bot auto-leaves. Defaults to `600` (10 min). Set to `0` to disable. In `play` mode: timer resets per sound, bot also leaves when the last user departs. In `false` mode: timer starts after the last user leaves. In `presence` mode: ignored. |
 | `BIND_IP` | optional | IP address the HTTP server binds to. Defaults to `127.0.0.1`; set to `0.0.0.0` to bind all interfaces (e.g. Docker dev). |
-| `SOUNDBOARD_DEFAULT_GUILD_ID` | optional | Guild id used to scope sounds when no tenant is specified. Falls back to `DISCORD_REQUIRED_GUILD_ID`, then the bot's sole guild, then the literal `default`. |
-| `SOUNDBOARD_DEFAULT_STORAGE_BYTES` | optional | Default per-guild storage cap in bytes. Defaults to `2147483648` (2GB). |
-| `TENANT_BASE_HOST` | optional | Base host for tenant subdomains, e.g. `soundbored.app` resolves `{slug}.soundbored.app` to that guild's soundboard. Empty disables subdomain routing. |
 
 ## Deployment
 
 The application is published to Docker Hub as `christom/soundbored`.
 
-For hosted, multi-tenant deployments (Coolify or compose + Caddy), see [docs/hosted-deployment.md](docs/hosted-deployment.md).
-
 ### Simple Docker Host
 ```bash
 docker pull christom/soundbored:latest
-docker run -d \
-  --name soundbored \
-  --restart unless-stopped \
-  -p 4000:4000 \
-  --env-file ./.env \
-  --mount source=soundbored_uploads,target=/app/priv/static/uploads \
-  --mount source=soundbored_db,target=/app/priv/db \
-  christom/soundbored:latest
+docker run -d -p 4000:4000 --env-file ./.env christom/soundbored
 ```
-
-Both mounts are required for production deployments:
-
-| Data | Container path |
-| --- | --- |
-| Uploaded audio | `/app/priv/static/uploads` |
-| SQLite database | `/app/priv/db` |
-
-Declaring these paths as volumes in the image does not make replacement containers reuse the same data automatically. Configure both mounts explicitly before the first production deployment and keep them attached during every redeployment.
-
-### Coolify
-
-Add two entries under **Persistent Storage** for the application:
-
-| Storage name | Destination path |
-| --- | --- |
-| `files` | `/app/priv/static/uploads` |
-| `db` | `/app/priv/db` |
-
-The storage names may differ, but both destination paths must be present. Verify that a redeployment retains the same storage sources before removing the previous container.
-
-Existing installations upgrading from a version that stored the database in the uploads directory should read [UPGRADING.md](UPGRADING.md) before redeploying.
-
-If you place the container behind your own reverse proxy, set `PHX_HOST` and `SCHEME` in `.env` to match the external URL and terminate TLS in your proxy.
+If you place the container behind your own reverse proxy, set `PHX_HOST` and `SCHEME` in `.env` to match the external URL and terminate TLS in your proxy. No additional compose files are required.
 
 ## Usage
+
+The custom [radio desk](docs/radio-desk.md) adds a shared master volume and
+**Save last 60 seconds** for incoming channel conversations. Capture is opt-in;
+saved WAV files stay in private storage for editing after the game.
 
 After inviting the bot to your server, join a voice channel and type `!join` to have the bot join the voice channel. Type `!leave` to have the bot leave. You can upload sounds to Soundbored and trigger them there and they will play in the voice channel.
 

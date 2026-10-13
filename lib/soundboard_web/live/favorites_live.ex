@@ -4,20 +4,18 @@ defmodule SoundboardWeb.FavoritesLive do
   alias Soundboard.{Favorites, PubSubTopics}
   alias SoundboardWeb.Live.Support.{FlashHelpers, SoundPlayback}
   import FlashHelpers, only: [flash_sound_played: 2, clear_flash_after_timeout: 1]
+  require Logger
 
   @impl true
   def mount(_params, session, socket) do
-    guild_id = session["guild_id"] || Soundboard.Tenants.default_guild_id()
-
     if connected?(socket) do
       PubSubTopics.subscribe_files()
-      PubSubTopics.subscribe_playback(guild_id)
+      PubSubTopics.subscribe_playback()
     end
 
     socket =
       socket
       |> mount_presence(session)
-      |> assign(:guild_id, guild_id)
       |> assign(:current_path, "/favorites")
       |> assign(:current_user, get_user_from_session(session))
       |> assign(:max_favorites, Favorites.max_favorites())
@@ -101,7 +99,7 @@ defmodule SoundboardWeb.FavoritesLive do
 
     assign(socket,
       favorites: favorites,
-      sounds_with_tags: Favorites.list_favorite_sounds_with_tags(user.id, socket.assigns.guild_id)
+      sounds_with_tags: Favorites.list_favorite_sounds_with_tags(user.id)
     )
   end
 end

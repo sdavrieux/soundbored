@@ -7,20 +7,17 @@ defmodule SoundboardWeb.StatsLive do
   alias Soundboard.{Accounts, Favorites, PubSubTopics, Sounds, Stats}
   alias SoundboardWeb.Live.Support.{FlashHelpers, SoundPlayback}
   import FlashHelpers, only: [clear_flash_after_timeout: 1]
+  require Logger
 
   @recent_limit 5
 
   @impl true
   def mount(_params, session, socket) do
-    guild_id = session["guild_id"] || Soundboard.Tenants.default_guild_id()
-
     if connected?(socket) do
       :timer.send_interval(60 * 60 * 1000, self(), :check_week_rollover)
-      PubSubTopics.subscribe_playback(guild_id)
+      PubSubTopics.subscribe_playback()
       PubSubTopics.subscribe_stats()
     end
-
-    socket = assign(socket, :guild_id, guild_id)
 
     current_week = get_week_range()
 
@@ -73,19 +70,9 @@ defmodule SoundboardWeb.StatsLive do
 
     recent_plays = recent_plays()
 
-    recent_uploads =
-      Sounds.get_recent_uploads(limit: @recent_limit, guild_id: socket.assigns[:guild_id])
-
+    recent_uploads = Sounds.get_recent_uploads(limit: @recent_limit)
     favorites = get_favorites(socket.assigns.current_user)
-
-    sound_ids_by_filename =
-      load_sound_ids_by_filename(
-        top_sounds,
-        recent_plays,
-        recent_uploads,
-        socket.assigns[:guild_id]
-      )
-
+    sound_ids_by_filename = load_sound_ids_by_filename(top_sounds, recent_plays, recent_uploads)
     avatars_by_username = load_avatars_by_username(top_users, recent_plays, recent_uploads)
 
     socket
@@ -401,7 +388,7 @@ defmodule SoundboardWeb.StatsLive do
     }
   end
 
-  defp load_sound_ids_by_filename(top_sounds, recent_plays, recent_uploads, guild_id) do
+  defp load_sound_ids_by_filename(top_sounds, recent_plays, recent_uploads) do
     filenames =
       top_sounds
       |> Enum.map(fn {filename, _count} -> filename end)
@@ -414,7 +401,7 @@ defmodule SoundboardWeb.StatsLive do
         %{}
 
       _ ->
-        Sounds.ids_by_filename(filenames, guild_id)
+        Sounds.ids_by_filename(filenames)
     end
   end
 

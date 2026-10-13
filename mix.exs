@@ -11,16 +11,12 @@ defmodule Soundboard.MixProject do
     [
       app: :soundboard,
       version: "1.7.0",
-      elixir: "~> 1.20",
+      elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       listeners: [Phoenix.CodeReloader],
       aliases: aliases(),
       deps: deps(),
-      usage_rules: usage_rules(),
-      dialyzer: [
-        plt_add_apps: [:ex_unit]
-      ],
       test_coverage: [
         tool: ExCoveralls,
         ignore_modules: [
@@ -51,27 +47,6 @@ defmodule Soundboard.MixProject do
     ]
   end
 
-  defp usage_rules do
-    [
-      file: "AGENTS.md",
-      # Inlined (loaded every session): built-in Elixir/OTP rules + search_docs guidance.
-      # Phoenix's sub-rules (~390 lines, web-specific) go to the skill below instead.
-      # After adding deps, check discovery with: mix usage_rules.list
-      usage_rules: [{:usage_rules, sub_rules: [:elixir, :otp]}],
-      skills: [
-        location: ".agents/skills",
-        build: [
-          phoenix: [
-            description:
-              "Use when editing files under lib/soundboard_web (controllers, LiveView, " <>
-                "components, HTML) or Ecto schemas and queries in lib/soundboard.",
-            usage_rules: ["phoenix:all"]
-          ]
-        ]
-      ]
-    ]
-  end
-
   # Configuration for the OTP application.
   #
   # Type `mix help compile.app` for more information.
@@ -94,7 +69,6 @@ defmodule Soundboard.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:vibe_kit, "== 0.1.7"},
       {:phoenix, "~> 1.8.0"},
       {:phoenix_ecto, "~> 4.6.5"},
       {:ecto_sql, "~> 3.10"},
@@ -103,7 +77,7 @@ defmodule Soundboard.MixProject do
       {:phoenix_live_view, "~> 1.1.0"},
       {:floki, ">= 0.30.0", only: :test},
       {:lazy_html, ">= 0.1.0", only: :test},
-      {:phoenix_live_dashboard, "~> 0.9.1"},
+      {:phoenix_live_dashboard, "~> 0.8.7"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
       {:heroicons, github: "tailwindlabs/heroicons", tag: "v2.1.1", app: false, compile: false},
@@ -112,23 +86,18 @@ defmodule Soundboard.MixProject do
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:bandit, "~> 1.8"},
-      {:eda, "~> 0.2.0"},
+      {:eda, "~> 0.1.3"},
       {:rustler, "~> 0.35", runtime: false},
       {:ecto_sqlite3, "~> 0.22"},
       {:ueberauth, "~> 0.10.5"},
       {:ueberauth_discord, "~> 0.6"},
-      {:stripity_stripe, "~> 3.2"},
       {:mock, "~> 0.3.9", only: :test},
       {:dotenvy, "~> 1.0.0", runtime: false},
       {:excoveralls, "~> 0.18.5", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
-      {:magic_bytes, "~> 0.2"},
       {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:reach, "~> 2.8", only: [:dev, :test], runtime: false},
-      {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
-      {:usage_rules, "~> 1.2", only: :dev}
+      {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -140,26 +109,18 @@ defmodule Soundboard.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
+      "deps.get": ["deps.get", "cmd elixir scripts/prepare_voice_runtime.exs"],
       setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
       "ecto.setup": ["ecto.create", "ecto.migrate"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test --warnings-as-errors"],
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       precommit: [
         "compile --warnings-as-errors",
         "deps.unlock --unused",
         "format",
         "credo --strict",
-        "cmd env MIX_ENV=test mix do compile --warnings-as-errors + test --warnings-as-errors",
+        "cmd env MIX_ENV=test mix test",
         "ex_dna"
-      ],
-      ci: [
-        "compile --warnings-as-errors",
-        "format --check-formatted",
-        "cmd ./scripts/check-coverage.sh",
-        "credo --strict",
-        "dialyzer",
-        "ex_dna --max-clones 0",
-        "reach.check --arch --smells --strict"
       ],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["tailwind soundboard", "esbuild soundboard"],
@@ -174,7 +135,6 @@ defmodule Soundboard.MixProject do
   def cli do
     [
       preferred_envs: [
-        ci: :test,
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,

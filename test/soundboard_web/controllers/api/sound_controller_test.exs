@@ -118,7 +118,7 @@ defmodule SoundboardWeb.API.SoundControllerTest do
     test "creates a local multipart sound and saves the file", %{conn: conn} do
       name = "api_local_#{System.unique_integer([:positive])}"
       tmp_path = temp_upload_path("sample.mp3")
-      File.cp!(Soundboard.TestHelpers.audio_fixture_path(), tmp_path)
+      File.write!(tmp_path, "audio")
 
       on_exit(fn -> File.rm(tmp_path) end)
 
@@ -142,7 +142,7 @@ defmodule SoundboardWeb.API.SoundControllerTest do
       sound = Repo.get_by!(Sound, filename: "#{name}.mp3")
       assert_in_delta sound.volume, 1.2, 0.0001
 
-      copied_file = Path.join(uploads_dir(), sound.storage_key)
+      copied_file = Path.join(uploads_dir(), sound.filename)
       assert File.exists?(copied_file)
 
       on_exit(fn -> File.rm(copied_file) end)
@@ -151,7 +151,7 @@ defmodule SoundboardWeb.API.SoundControllerTest do
     test "infers local source type when multipart file is present", %{conn: conn} do
       name = "api_local_inferred_#{System.unique_integer([:positive])}"
       tmp_path = temp_upload_path("inferred.mp3")
-      File.cp!(Soundboard.TestHelpers.audio_fixture_path(), tmp_path)
+      File.write!(tmp_path, "audio")
 
       on_exit(fn -> File.rm(tmp_path) end)
 
@@ -269,7 +269,7 @@ defmodule SoundboardWeb.API.SoundControllerTest do
 
   describe "play" do
     test "plays a sound as the authenticated token user", %{conn: conn, sound: sound, user: user} do
-      with_mock Soundboard.AudioPlayer, play_sound: fn _filename, _actor, _guild -> :ok end do
+      with_mock Soundboard.AudioPlayer, play_sound: fn _filename, _actor -> :ok end do
         conn = post(conn, ~p"/api/sounds/#{sound.id}/play")
 
         assert %{
@@ -284,7 +284,7 @@ defmodule SoundboardWeb.API.SoundControllerTest do
         assert requested_by == user.username
         assert sound_id == sound.id
         assert filename == sound.filename
-        assert_called(Soundboard.AudioPlayer.play_sound(sound.filename, user, :_))
+        assert_called(Soundboard.AudioPlayer.play_sound(sound.filename, user))
       end
     end
 
@@ -293,7 +293,7 @@ defmodule SoundboardWeb.API.SoundControllerTest do
       sound: sound,
       user: user
     } do
-      with_mock Soundboard.AudioPlayer, play_sound: fn _filename, _actor, _guild -> :ok end do
+      with_mock Soundboard.AudioPlayer, play_sound: fn _filename, _actor -> :ok end do
         conn =
           conn
           |> put_req_header("x-username", "TestUser")
@@ -309,12 +309,12 @@ defmodule SoundboardWeb.API.SoundControllerTest do
         assert requested_by == user.username
         assert sound_id == sound.id
         assert filename == sound.filename
-        assert_called(Soundboard.AudioPlayer.play_sound(sound.filename, user, :_))
+        assert_called(Soundboard.AudioPlayer.play_sound(sound.filename, user))
       end
     end
 
     test "returns error when sound not found", %{conn: conn} do
-      with_mock Soundboard.AudioPlayer, play_sound: fn _filename, _username, _guild -> :ok end do
+      with_mock Soundboard.AudioPlayer, play_sound: fn _filename, _username -> :ok end do
         conn = post(conn, ~p"/api/sounds/999999/play")
         assert %{"error" => "Sound not found"} = json_response(conn, 404)
       end

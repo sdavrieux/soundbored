@@ -53,15 +53,14 @@ defmodule Soundboard.AudioPlayer.SoundLibraryTest do
 
   test "get_sound_path/1 resolves local sounds when the file exists", %{user: user} do
     filename = unique_filename("local", ".wav")
+    path = Soundboard.UploadsPath.file_path(filename)
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, "audio")
+    on_exit(fn -> File.rm(path) end)
+
     sound = insert_sound!(user, %{filename: filename, source_type: "local", volume: 1.2})
 
-    # File lives at storage_key path, not display filename path
-    storage_path = Soundboard.UploadsPath.file_path(sound.storage_key)
-    File.mkdir_p!(Path.dirname(storage_path))
-    File.write!(storage_path, "audio")
-    on_exit(fn -> File.rm(storage_path) end)
-
-    assert {:ok, {^storage_path, 1.2}} = SoundLibrary.get_sound_path(sound.filename)
+    assert {:ok, {^path, 1.2}} = SoundLibrary.get_sound_path(sound.filename)
   end
 
   test "get_sound_path/1 returns helpful errors for missing local files", %{user: user} do
@@ -69,9 +68,7 @@ defmodule Soundboard.AudioPlayer.SoundLibraryTest do
     sound = insert_sound!(user, %{filename: filename, source_type: "local"})
 
     assert {:error, message} = SoundLibrary.get_sound_path(sound.filename)
-
-    assert message ==
-             "Sound file not found at #{Soundboard.UploadsPath.file_path(sound.storage_key)}"
+    assert message == "Sound file not found at #{Soundboard.UploadsPath.file_path(filename)}"
   end
 
   test "get_sound_path/1 returns error when the sound is missing" do
@@ -114,19 +111,10 @@ defmodule Soundboard.AudioPlayer.SoundLibraryTest do
     assert {:ok, {"https://example.com/invalidate.mp3", 1.0}} =
              SoundLibrary.get_sound_path(sound.filename)
 
-    assert [{_, _}] =
-             :ets.lookup(
-               :sound_meta_cache,
-               {Soundboard.Tenants.default_guild_id(), sound.filename}
-             )
+    assert [{_, _}] = :ets.lookup(:sound_meta_cache, sound.filename)
 
     assert :ok = SoundLibrary.invalidate_cache(sound.filename)
-
-    assert [] ==
-             :ets.lookup(
-               :sound_meta_cache,
-               {Soundboard.Tenants.default_guild_id(), sound.filename}
-             )
+    assert [] == :ets.lookup(:sound_meta_cache, sound.filename)
 
     assert :ok = SoundLibrary.invalidate_cache(nil)
   end

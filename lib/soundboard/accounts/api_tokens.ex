@@ -35,7 +35,8 @@ defmodule Soundboard.Accounts.ApiTokens do
       |> ApiToken.changeset(%{
         user_id: user_id,
         token_hash: hash,
-        label: normalize_label(attrs)
+        token: raw,
+        label: Map.get(attrs, "label") || Map.get(attrs, :label)
       })
 
     case Repo.insert(changeset) do
@@ -112,12 +113,4 @@ defmodule Soundboard.Accounts.ApiTokens do
       _ -> -1
     end
   end
-
-  defp normalize_label(attrs) when is_map(attrs) do
-    attrs
-    |> Map.new(fn {key, value} -> {to_string(key), value} end)
-    |> Map.get("label")
-  end
-
-  defp normalize_label(_), do: nil
 end

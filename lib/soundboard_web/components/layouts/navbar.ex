@@ -1,211 +1,67 @@
 defmodule SoundboardWeb.Components.Layouts.Navbar do
   @moduledoc """
-  The navbar component. A plain function component so it renders in both
-  LiveViews and controller-rendered pages; the mobile menu toggles entirely
-  client-side via JS.
+  The navbar component.
   """
-
+  use Phoenix.LiveComponent
   use SoundboardWeb, :html
-  alias Phoenix.LiveView.JS
-  alias Soundboard.Billing
 
-  def navbar(assigns) do
-    assigns = assign_new(assigns, :app_unlocked, fn -> true end)
-
+  @impl true
+  def render(assigns) do
     ~H"""
-    <nav class="fixed w-full top-0 left-0 right-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-50">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16">
-          <div class="flex">
-            <div class="flex-shrink-0 flex items-center">
-              <span class="text-xl font-bold text-gray-800 dark:text-white">
-                <.link navigate={if @app_unlocked, do: ~p"/", else: ~p"/guilds"}>SoundBored</.link>
-              </span>
-            </div>
-            <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <%= if @app_unlocked do %>
-                <.nav_link navigate="/" active={current_page?(@current_path, "/")}>
-                  Sounds
-                </.nav_link>
-                <.nav_link navigate="/favorites" active={current_page?(@current_path, "/favorites")}>
-                  Favorites
-                </.nav_link>
-                <.nav_link navigate="/stats" active={current_page?(@current_path, "/stats")}>
-                  Stats
-                </.nav_link>
-                <%= if @current_user do %>
-                  <.nav_link
-                    navigate="/settings"
-                    active={current_page?(@current_path, "/settings")}
-                  >
-                    Settings
-                  </.nav_link>
-                <% end %>
-              <% else %>
-                <.nav_link navigate="/guilds" active={current_page?(@current_path, "/guilds")}>
-                  Get started
-                </.nav_link>
-              <% end %>
-              <%= if @current_user != nil and Billing.configured?() do %>
-                <.nav_link navigate="/billing" active={current_page?(@current_path, "/billing")}>
-                  Billing
-                </.nav_link>
-              <% end %>
-            </div>
-          </div>
-
-          <div class="hidden sm:ml-6 sm:flex sm:items-center">
-            <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-              <%= visible_users(@presences)
-                  |> Enum.map(fn user -> %>
-                <div class="flex items-center gap-1">
-                  <span
-                    id={"user-#{user.username}"}
-                    data-username={user.username}
-                    class={[
-                      "px-2 py-1 rounded-full text-xs select-none transition-all duration-150 flex items-center gap-1",
-                      "cursor-default",
-                      SoundboardWeb.PresenceHandler.get_user_color(user.username)
-                    ]}
-                  >
-                    <img
-                      src={user.avatar}
-                      class="w-4 h-4 rounded-full"
-                      alt={"#{user.username}'s avatar"}
-                    />
-                    {user.username}
-                  </span>
-                </div>
-              <% end) %>
-            </div>
-          </div>
-
-          <div class="-mr-2 flex items-center sm:hidden">
-            <button
-              type="button"
-              class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-              aria-controls="mobile-menu"
-              phx-click={JS.toggle(to: "#mobile-menu")}
-            >
-              <span class="sr-only">Open main menu</span>
-              <svg
-                class="h-6 w-6"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
+    <aside id="studio-sidebar" class="studio-sidebar" phx-hook="Sidebar">
+      <div class="sidebar-header">
+        <.link navigate="/" class="sidebar-brand">SoundBored</.link>
+        <button
+          type="button"
+          class="sidebar-toggle"
+          aria-label="Collapse sidebar"
+          aria-expanded="true"
+          aria-controls="studio-navigation"
+          data-sidebar-toggle
+        >
+          <.icon name="hero-bars-3" class="h-6 w-6" />
+        </button>
       </div>
-      
-    <!-- Mobile menu -->
-      <div class="sm:hidden" id="mobile-menu" hidden>
-        <div class="pt-2 pb-3 space-y-1">
-          <%= if @app_unlocked do %>
-            <.mobile_nav_link navigate="/" active={current_page?(@current_path, "/")}>
-              Sounds
-            </.mobile_nav_link>
-            <.mobile_nav_link
-              navigate="/favorites"
-              active={current_page?(@current_path, "/favorites")}
-            >
-              Favorites
-            </.mobile_nav_link>
-            <.mobile_nav_link navigate="/stats" active={current_page?(@current_path, "/stats")}>
-              Stats
-            </.mobile_nav_link>
-            <%= if @current_user do %>
-              <.mobile_nav_link
-                navigate="/settings"
-                active={current_page?(@current_path, "/settings")}
-              >
-                Settings
-              </.mobile_nav_link>
-            <% end %>
-          <% else %>
-            <.mobile_nav_link navigate="/guilds" active={current_page?(@current_path, "/guilds")}>
-              Get started
-            </.mobile_nav_link>
-          <% end %>
-          <%= if @current_user != nil and Billing.configured?() do %>
-            <.mobile_nav_link navigate="/billing" active={current_page?(@current_path, "/billing")}>
-              Billing
-            </.mobile_nav_link>
-          <% end %>
-        </div>
-        <div class="pt-4 pb-3 border-t border-gray-200 dark:border-gray-700">
-          <div class="space-y-2 px-4">
-            <%= visible_users(@presences)
-                |> Enum.map(fn user -> %>
-              <div class="flex items-center gap-2 py-2">
-                <span
-                  id={"mobile-user-#{user.username}"}
-                  data-username={user.username}
-                  class={[
-                    "px-3 py-2 rounded-full text-sm select-none transition-all duration-150 flex items-center gap-2",
-                    "cursor-default leading-relaxed tracking-wide",
-                    SoundboardWeb.PresenceHandler.get_user_color(user.username)
-                  ]}
-                >
-                  <img
-                    src={user.avatar}
-                    class="w-5 h-5 rounded-full"
-                    alt={"#{user.username}'s avatar"}
-                  />
-                  <span class="truncate">{user.username}</span>
-                </span>
-              </div>
-            <% end) %>
-          </div>
-        </div>
+      <nav id="studio-navigation" aria-label="Main navigation" class="sidebar-links">
+        <.link
+          :for={
+            {path, label, icon} <- [
+              {"/", "Sounds", "hero-squares-2x2"},
+              {"/moments", "Saved moments", "hero-scissors"},
+              {"/favorites", "Favorites", "hero-heart"},
+              {"/stats", "Stats", "hero-chart-bar"},
+              {"/settings", "Settings", "hero-cog-6-tooth"}
+            ]
+          }
+          navigate={path}
+          aria-current={if @current_path == path, do: "page", else: nil}
+          title={label}
+          aria-label={label}
+          class={["sidebar-link", @current_path == path && "is-active"]}
+        >
+          <.icon name={icon} class="h-6 w-6 shrink-0" /><span class="sidebar-label">{label}</span>
+        </.link>
+      </nav>
+      <div class="sidebar-presences" aria-label="Online users">
+        <span
+          :for={user <- visible_users(@presences)}
+          id={"user-#{user.username}"}
+          data-username={user.username}
+          class="flex items-center gap-2 py-2 text-sm"
+        >
+          <img
+            :if={is_binary(user.avatar) and user.avatar != ""}
+            src={user.avatar}
+            class="w-6 h-6 rounded-full"
+            alt=""
+          /><span
+            :if={not is_binary(user.avatar) or user.avatar == ""}
+            class="w-6 h-6 rounded-full bg-gray-700 text-center"
+            aria-hidden="true"
+          >{String.first(user.username)}</span>{user.username}
+        </span>
       </div>
-    </nav>
-    """
-  end
-
-  defp nav_link(assigns) do
-    ~H"""
-    <.link
-      navigate={@navigate}
-      class={[
-        "inline-flex items-center px-1 pt-1 text-sm font-medium",
-        if(@active,
-          do: "border-b-2 border-blue-500 text-gray-900 dark:text-gray-100",
-          else:
-            "border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-200"
-        )
-      ]}
-    >
-      {render_slot(@inner_block)}
-    </.link>
-    """
-  end
-
-  defp mobile_nav_link(assigns) do
-    ~H"""
-    <.link
-      navigate={@navigate}
-      class={[
-        "block pl-4 pr-4 py-3 border-l-4 text-base font-medium leading-relaxed tracking-wide",
-        if(@active,
-          do: "bg-blue-50 dark:bg-blue-900/50 border-blue-500 text-blue-700 dark:text-blue-100",
-          else:
-            "border-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-800 dark:hover:text-gray-200"
-        )
-      ]}
-    >
-      {render_slot(@inner_block)}
-    </.link>
+    </aside>
     """
   end
 
@@ -216,6 +72,4 @@ defmodule SoundboardWeb.Components.Layouts.Navbar do
     end)
     |> Enum.uniq_by(& &1.username)
   end
-
-  defp current_page?(current_path, path), do: current_path == path
 end

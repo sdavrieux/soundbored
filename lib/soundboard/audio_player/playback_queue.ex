@@ -5,7 +5,6 @@ defmodule Soundboard.AudioPlayer.PlaybackQueue do
 
   alias Soundboard.AudioPlayer.{PlaybackEngine, SoundLibrary, State}
   alias Soundboard.Discord.Voice
-  @boundary_exceptions Soundboard.Boundary.exceptions()
 
   @type play_request :: %{
           guild_id: String.t(),
@@ -19,7 +18,7 @@ defmodule Soundboard.AudioPlayer.PlaybackQueue do
   @spec build_request({String.t(), String.t()}, String.t(), term()) ::
           {:ok, play_request()} | {:error, String.t()}
   def build_request({guild_id, channel_id}, sound_name, actor) do
-    case SoundLibrary.get_sound_path(guild_id, sound_name) do
+    case SoundLibrary.get_sound_path(sound_name) do
       {:ok, {path_or_url, volume}} ->
         {:ok,
          %{
@@ -154,7 +153,7 @@ defmodule Soundboard.AudioPlayer.PlaybackQueue do
 
   defp start_playback(state, request) do
     task =
-      Task.Supervisor.async_nolink(Soundboard.AudioTaskSupervisor, fn ->
+      Task.async(fn ->
         PlaybackEngine.play(
           request.guild_id,
           request.channel_id,
@@ -257,7 +256,6 @@ defmodule Soundboard.AudioPlayer.PlaybackQueue do
   defp safe_voice_playing(guild_id) do
     {:ok, Voice.playing?(guild_id)}
   rescue
-    error in @boundary_exceptions ->
-      {:error, {:voice_playing_unavailable, Exception.message(error)}}
+    error -> {:error, {:voice_playing_unavailable, Exception.message(error)}}
   end
 end

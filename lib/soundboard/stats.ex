@@ -6,16 +6,14 @@ defmodule Soundboard.Stats do
   import Ecto.Query
   import Ecto.Changeset, only: [add_error: 3, change: 1]
 
-  alias Soundboard.{Accounts.User, PubSubTopics, Repo, Sounds}
-  alias Soundboard.Stats.Play
+  alias Soundboard.{Accounts.User, PubSubTopics, Repo, Sounds, Stats.Play}
 
   @type leaderboard_entry :: {String.t(), non_neg_integer()}
   @type recent_play_entry :: {integer(), String.t(), String.t(), NaiveDateTime.t()}
 
-  @spec track_play(String.t(), integer() | nil, String.t() | nil) ::
-          {:ok, Play.t()} | {:error, Ecto.Changeset.t()}
-  def track_play(sound_name, user_id, guild_id \\ nil) do
-    with {:ok, sound_id} <- Sounds.fetch_sound_id(sound_name, guild_id),
+  @spec track_play(String.t(), integer() | nil) :: {:ok, Play.t()} | {:error, Ecto.Changeset.t()}
+  def track_play(sound_name, user_id) do
+    with {:ok, sound_id} <- Sounds.fetch_sound_id(sound_name),
          {:ok, play} <-
            insert_play(%{played_filename: sound_name, sound_id: sound_id, user_id: user_id}) do
       broadcast_stats_update()

@@ -16,19 +16,15 @@ defmodule SoundboardWeb.SoundboardLive do
 
   @impl true
   def mount(_params, session, socket) do
-    guild_id = session["guild_id"] || Soundboard.Tenants.default_guild_id()
-
     socket =
       if connected?(socket) do
         PubSubTopics.subscribe_files()
-        PubSubTopics.subscribe_playback(guild_id)
+        PubSubTopics.subscribe_playback()
         send(self(), :load_sound_files)
         socket
       else
         socket
       end
-
-    socket = assign(socket, :guild_id, guild_id)
 
     socket =
       socket
@@ -58,11 +54,11 @@ defmodule SoundboardWeb.SoundboardLive do
     |> allow_upload(:audio,
       accept: ~w(audio/mpeg audio/wav audio/ogg audio/x-m4a),
       max_entries: 1,
-      max_file_size: Application.get_env(:soundboard, :max_upload_bytes, 10_000_000),
+      max_file_size: 25_000_000,
       auto_upload: false,
       progress: &handle_progress/3,
       accept_errors: [
-        too_large: "File is too large (max #{max_upload_mb()}MB)",
+        too_large: "File is too large (max 25MB)",
         not_accepted: "Invalid file type. Please upload an MP3, WAV, OGG, or M4A file."
       ]
     )
@@ -97,16 +93,6 @@ defmodule SoundboardWeb.SoundboardLive do
   end
 
   @impl true
-  def handle_event("commit_search", %{"query" => query}, socket) do
-    # Pressing enter commits the text search and drops any selected tag,
-    # giving a keyboard alternative to clicking the tag button to clear it.
-    {:noreply,
-     socket
-     |> assign(:search_query, query)
-     |> clear_tag_filters()}
-  end
-
-  @impl true
   def handle_event("toggle_tag_filter", %{"tag" => tag_name}, socket) do
     case Enum.find(all_tags(socket.assigns.uploaded_files), &(&1.name == tag_name)) do
       nil ->
@@ -124,8 +110,8 @@ defmodule SoundboardWeb.SoundboardLive do
   end
 
   @impl true
-  def handle_event("clear_tag_filters", _params, socket) do
-    {:noreply, clear_tag_filters(socket)}
+  def handle_event("clear_tag_filters", _, socket) do
+    {:noreply, assign(socket, :selected_tags, [])}
   end
 
   @impl true
@@ -316,7 +302,7 @@ defmodule SoundboardWeb.SoundboardLive do
 
     # Stop Discord bot sounds if user is logged in
     if socket.assigns.current_user do
-      Soundboard.AudioPlayer.stop_sound(socket.assigns.guild_id)
+      Soundboard.AudioPlayer.stop_sound()
     end
 
     {:noreply, socket}
@@ -350,8 +336,6 @@ defmodule SoundboardWeb.SoundboardLive do
      |> assign(:loading_sounds, false)}
   end
 
-  defp clear_tag_filters(socket), do: assign(socket, :selected_tags, [])
-
   defp assign_favorites(socket, nil), do: assign(socket, :favorites, [])
 
   defp assign_favorites(socket, user) do
@@ -360,7 +344,7 @@ defmodule SoundboardWeb.SoundboardLive do
   end
 
   defp load_sound_files(socket) do
-    assign(socket, :uploaded_files, Sounds.list_detailed(socket.assigns.guild_id))
+    assign(socket, :uploaded_files, Sounds.list_detailed())
   end
 
   defp get_random_sound([]), do: nil
@@ -371,9 +355,5 @@ defmodule SoundboardWeb.SoundboardLive do
 
   defp handle_progress(:audio, _entry, socket) do
     {:noreply, socket}
-  end
-
-  defp max_upload_mb do
-    div(Application.get_env(:soundboard, :max_upload_bytes, 10_000_000), 1_000_000)
   end
 end

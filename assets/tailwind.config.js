@@ -10,7 +10,6 @@ module.exports = {
     "./js/**/*.js",
     "../lib/*_web/**/*.*ex"
   ],
-  darkMode: "class",
   theme: {
     extend: {
       colors: {

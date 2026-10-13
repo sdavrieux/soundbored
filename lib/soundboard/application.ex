@@ -11,16 +11,13 @@ defmodule Soundboard.Application do
   def start(_type, _args) do
     Logger.info("Starting Soundboard Application")
 
-    # Bot is not connected until the gateway READY event flips this.
-    Application.put_env(:soundboard, :bot_ready, false)
-
     children = [
       Soundboard.Repo,
-      {Task.Supervisor, name: Soundboard.AudioTaskSupervisor},
-      {Registry, keys: :unique, name: Soundboard.AudioPlayer.Registry},
-      {DynamicSupervisor, name: Soundboard.AudioPlayer.Supervisor, strategy: :one_for_one},
+      {Soundboard.AudioPlayer, []},
       SoundboardWeb.Telemetry,
       {Phoenix.PubSub, name: Soundboard.PubSub},
+      {Task.Supervisor, name: Soundboard.Capture.Tasks},
+      Soundboard.Capture,
       SoundboardWeb.Presence,
       SoundboardWeb.PresenceHandler,
       Soundboard.Discord.Handler.State,

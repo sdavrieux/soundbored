@@ -15,13 +15,10 @@ defmodule Soundboard.Sound do
 
   schema "sounds" do
     field :filename, :string
-    field :storage_key, :string
     field :url, :string
     field :source_type, :string, default: "local"
     field :description, :string
     field :volume, :float, default: 1.0
-    field :guild_id, :string
-    field :byte_size, :integer, default: 0
     belongs_to :user, Soundboard.Accounts.User
     has_many :user_sound_settings, Soundboard.UserSoundSetting
 
@@ -37,30 +34,17 @@ defmodule Soundboard.Sound do
     sound
     |> cast(attrs, [
       :filename,
-      :storage_key,
       :url,
       :source_type,
       :description,
       :user_id,
-      :volume,
-      :guild_id,
-      :byte_size
+      :volume
     ])
-    |> Soundboard.Tenants.put_default_guild_id()
-    |> validate_required([:user_id, :guild_id])
-    |> maybe_set_storage_key()
+    |> validate_required([:user_id])
     |> validate_source_type()
     |> validate_volume()
-    |> unique_constraint(:filename, name: :sounds_guild_id_filename_index)
-    |> unique_constraint(:storage_key, name: :sounds_storage_key_index)
+    |> unique_constraint(:filename, name: :sounds_filename_index)
     |> put_tags(attrs)
-  end
-
-  defp maybe_set_storage_key(changeset) do
-    case get_field(changeset, :storage_key) do
-      v when v in [nil, ""] -> put_change(changeset, :storage_key, Ecto.UUID.generate())
-      _ -> changeset
-    end
   end
 
   def with_tags(query \\ __MODULE__) do

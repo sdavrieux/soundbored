@@ -1,7 +1,5 @@
 import Config
 
-config :soundboard, enable_test_login: true
-
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used
@@ -9,7 +7,7 @@ config :soundboard, enable_test_login: true
 # Run `mix help test` for more information.
 config :soundboard, Soundboard.Repo,
   adapter: Ecto.Adapters.SQLite3,
-  database: Path.expand("../priv/db/soundboard_test.db", Path.dirname(__ENV__.file)),
+  database: Path.expand("../soundboard_test.db", Path.dirname(__ENV__.file)),
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 1,
   busy_timeout: 5000,
@@ -61,7 +59,7 @@ config :soundboard, :sql_sandbox, true
 
 config :soundboard, env: :test
 
-config :soundboard, Soundboard.AudioPlayer.Server, voice_maintenance_enabled: false
+config :soundboard, Soundboard.AudioPlayer, voice_maintenance_enabled: false
 
 config :soundboard, Soundboard.PubSub,
   adapter: Phoenix.PubSub.PG2,

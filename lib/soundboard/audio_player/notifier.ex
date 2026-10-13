@@ -3,11 +3,11 @@ defmodule Soundboard.AudioPlayer.Notifier do
 
   alias Soundboard.PubSubTopics
 
-  def sound_played(sound_name, actor_name, guild_id \\ nil) do
-    PubSubTopics.broadcast_sound_played(sound_name, actor_name, guild_id)
+  def sound_played(sound_name, actor_name) do
+    PubSubTopics.broadcast_sound_played(sound_name, actor_name)
   end
 
-  def error(message, guild_id \\ nil) do
-    PubSubTopics.broadcast_error(message, guild_id)
+  def error(message) do
+    PubSubTopics.broadcast_error(message)
   end
 end

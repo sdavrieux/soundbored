@@ -64,27 +64,28 @@ config :mime, :types, %{
   "audio/x-m4a" => ["m4a"]
 }
 
+# Import environment specific config. This must remain at the bottom
+# of this file so it overrides the configuration defined above.
+import_config "#{config_env()}.exs"
+
+# Add this near the top of the file
 config :soundboard,
   ecto_repos: [Soundboard.Repo]
 
+# Add this somewhere in the file
 config :soundboard, Soundboard.Repo,
-  database: "priv/db/soundboard_dev.db",
+  database: "priv/static/uploads/database.db",
   pool_size: 5
 
 config :phoenix_live_view,
   flash_timeout: 3000
-
-# Import environment specific config. This must remain at the bottom
-# of this file so it overrides the configuration defined above.
-import_config "#{config_env()}.exs"
 
 config :soundboard, SoundboardWeb.Presence, pubsub_server: Soundboard.PubSub
 
 # Optional voice startup probe (disabled by default)
 config :soundboard,
   voice_rtp_probe: false,
-  voice_rtp_probe_timeout_ms: 6_000,
-  max_upload_bytes: 10_000_000
+  voice_rtp_probe_timeout_ms: 6_000
 
 # Add this with your other configs
 config :ueberauth, Ueberauth,

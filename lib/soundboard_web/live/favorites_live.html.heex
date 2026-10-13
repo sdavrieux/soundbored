@@ -18,7 +18,7 @@
         </p>
       </div>
     <% else %>
-      <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <%= for sound <- @sounds_with_tags do %>
           <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-all duration-200">
             <button
@@ -32,7 +32,7 @@
             </button>
 
             <div class="relative z-10 p-4 flex flex-col min-h-[120px] pointer-events-none">
-              <div class="text-gray-800 dark:text-gray-200 font-medium break-all">
+              <div class="text-gray-800 dark:text-gray-200 font-medium break-words">
                 {display_name(sound.filename)}
               </div>
 
@@ -51,7 +51,7 @@
                   <button
                     id={"local-play-#{Path.basename(sound.filename, Path.extname(sound.filename))}"}
                     phx-hook="LocalPlayer"
-                    data-filename={sound.storage_key}
+                    data-filename={sound.filename}
                     data-source-type={sound.source_type}
                     data-url={sound.url}
                     data-volume={sound.volume || 1.0}

@@ -9,8 +9,10 @@ config :soundboard, SoundboardWeb.Endpoint,
   cache_static_manifest: "priv/static/cache_manifest.json"
 
 config :soundboard, Soundboard.Repo,
-  database: "/app/priv/db/soundboard_prod.db",
-  pool_size: 5
+  database: "/app/priv/static/uploads/soundboard_prod.db",
+  pool_size: 5,
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true
 
 # Ensure the uploads directory exists
 config :soundboard,

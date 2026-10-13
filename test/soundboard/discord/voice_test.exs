@@ -41,10 +41,14 @@ defmodule Soundboard.Discord.VoiceTest do
     assert Process.get(:voice_play_args) == {"123", "file.mp3", :url, [volume: 1.2]}
   end
 
-  test "falls back to play/3 and drops opts when only play/3 is available" do
+  test "rejects unsupported volume options rather than silently ignoring the slider" do
     Application.put_env(:soundboard, :eda_voice_module, VoiceModuleWithPlay3)
 
-    assert :ok = Voice.play(123, "file.mp3", :url, volume: 1.2)
+    assert {:error, ":volume_options_unsupported"} =
+             Voice.play(123, "file.mp3", :url, volume: 1.2)
+
+    refute Process.get(:voice_play_args)
+    assert :ok = Voice.play(123, "file.mp3", :url)
     assert Process.get(:voice_play_args) == {"123", "file.mp3", :url}
   end
 end

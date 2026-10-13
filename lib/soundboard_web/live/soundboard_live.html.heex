@@ -1,16 +1,6 @@
 <div class="max-w-6xl mx-auto px-4 py-8">
   <div class="flex flex-wrap items-start justify-between gap-4 mb-8">
-    <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-100 flex-1 min-w-[200px]">
-      <span class="group relative cursor-default inline-block">
-        Sounds<div class="pointer-events-none fixed inset-0 opacity-0 group-hover:opacity-100 transition-all duration-300 z-[9999]">
-          <img
-            src="/images/kubernetes.gif"
-            alt="kubernetes"
-            class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] object-contain"
-          />
-        </div>
-      </span>
-    </h1>
+    <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-100">Sounds</h1>
     <div class="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-end gap-2 w-full sm:w-auto">
       <button
         phx-click="show_upload_modal"
@@ -28,17 +18,15 @@
         Play Random
       </button>
       <button
-        phx-click="stop_sound"
-        class="w-full sm:w-auto justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-md text-sm sm:text-base font-medium transition-colors
-               border border-red-500/70 text-red-600 dark:text-red-300 hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+        phx-click={if @studio_capture.target, do: "stop_capture", else: "start_capture"}
+        class="studio-button border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100"
       >
-        Stop All
+        {if @studio_capture.target, do: "Stop capture", else: "Start capture"}
       </button>
     </div>
   </div>
 
   <%!-- Search Bar --%>
-  <.radio_desk volume={@master_volume} capture={@capture} recordings={@recordings} />
 
   <div class="mb-8">
     <form phx-change="search" phx-submit="search" class="relative">
@@ -124,7 +112,7 @@
     </div>
   </div>
   <%!-- Sound Grid --%>
-  <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
     <%= if @loading_sounds do %>
       <div class="col-span-full">
         <div class="loading-container">
@@ -149,7 +137,7 @@
           <div class="relative z-10 p-4 flex flex-col min-h-[120px] pointer-events-none">
             <%!-- Sound title and uploader info --%>
             <div class="flex-1 min-w-0">
-              <div class="text-gray-800 dark:text-gray-200 font-medium break-all">
+              <div class="text-gray-800 dark:text-gray-200 font-medium break-words">
                 {display_name(sound.filename)}
               </div>
               <%= if sound.user && sound.user.username do %>

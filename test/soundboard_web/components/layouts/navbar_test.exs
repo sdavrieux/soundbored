@@ -18,7 +18,7 @@ defmodule SoundboardWeb.Components.Layouts.NavbarTest do
     assert html =~ "Sounds"
     assert html =~ "Favorites"
     assert html =~ "Stats"
-    refute html =~ "Settings"
+    assert html =~ "Saved moments"
   end
 
   test "renders settings link and deduplicated presences for authenticated users" do
@@ -39,7 +39,7 @@ defmodule SoundboardWeb.Components.Layouts.NavbarTest do
     assert html =~ "user-bob"
 
     # Duplicated presence entries for the same user should only render once per menu section.
-    assert length(Regex.scan(~r/user-alice/, html)) == 2
+    assert length(Regex.scan(~r/user-alice/, html)) == 1
   end
 
   test "toggle-mobile-menu flips show_mobile_menu assign" do

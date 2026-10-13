@@ -41,7 +41,7 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
          channel_id: fn "guild-1" -> nil end,
          join_channel: fn "guild-1", "channel-9" -> send(test_pid, :joined_channel) end,
          ready?: fn "guild-1" -> true end,
-         play: fn "guild-1", "/tmp/intro.mp3", :url, [volume: 0.4] ->
+         play: fn "guild-1", "/tmp/intro.mp3", :url, [volume: 0.4, clip_volume: 0.8] ->
            send(test_pid, :played_sound)
            :ok
          end
@@ -81,7 +81,7 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
          channel_id: fn "guild-1" -> "channel-9" end,
          ready?: fn "guild-1" -> true end,
          stop: fn "guild-1" -> send(test_pid, :stopped_audio) end,
-         play: fn "guild-1", "/tmp/retry.mp3", :url, [volume: 1.0] ->
+         play: fn "guild-1", "/tmp/retry.mp3", :url, [volume: 1.0, clip_volume: 1.0] ->
            case Process.get(attempt_ref, 0) do
              0 ->
                Process.put(attempt_ref, 1)
@@ -149,7 +149,7 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
            end
          end,
          join_channel: fn "guild-1", "channel-9" -> send(test_pid, :refreshed_voice) end,
-         play: fn "guild-1", "/tmp/refresh.mp3", :url, [volume: 1.0] ->
+         play: fn "guild-1", "/tmp/refresh.mp3", :url, [volume: 1.0, clip_volume: 1.0] ->
            attempt = Process.get(attempt_ref, 0)
            Process.put(attempt_ref, attempt + 1)
 
@@ -233,7 +233,9 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
            [
              channel_id: fn "guild-1" -> "channel-9" end,
              ready?: fn "guild-1" -> false end,
-             play: fn "guild-1", "/tmp/timeout.mp3", :url, [volume: 1.0] -> :ok end
+             play: fn "guild-1", "/tmp/timeout.mp3", :url, [volume: 1.0, clip_volume: 1.0] ->
+               :ok
+             end
            ]},
           {Soundboard.PubSubTopics, [],
            [

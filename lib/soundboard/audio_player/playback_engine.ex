@@ -41,7 +41,10 @@ defmodule Soundboard.AudioPlayer.PlaybackEngine do
         guild_id: guild_id,
         play_input: play_input,
         play_type: play_type,
-        play_options: [volume: Soundboard.MasterVolume.apply(clamp_volume(volume))],
+        play_options: [
+          volume: Soundboard.MasterVolume.apply(clamp_volume(volume)),
+          clip_volume: clamp_volume(volume)
+        ],
         sound_name: sound_name,
         actor: actor
       }

@@ -1,9 +1,9 @@
 defmodule Soundboard.Discord.Voice do
   @moduledoc false
 
-  require Logger
-
   alias EDA.Voice, as: EDAVoice
+  alias Soundboard.AudioPlayer.LiveStream
+  alias Soundboard.MasterVolume
 
   @connected_error "Must be connected to voice channel to play audio."
   @not_ready_error "Voice session is still negotiating encryption."
@@ -19,6 +19,21 @@ defmodule Soundboard.Discord.Voice do
 
   def play(guild_id, input, type, opts \\ []) do
     guild_id = to_id(guild_id)
+
+    {input, type, opts} =
+      if voice_module() == EDAVoice and type == :url do
+        MasterVolume.sync()
+
+        frames =
+          LiveStream.frames(
+            input,
+            Keyword.get(opts, :clip_volume, Keyword.get(opts, :volume, 1.0))
+          )
+
+        {frames, :raw, []}
+      else
+        {input, type, Keyword.delete(opts, :clip_volume)}
+      end
 
     case play_with_supported_arity(guild_id, input, type, opts) do
       :ok -> :ok
@@ -69,8 +84,7 @@ defmodule Soundboard.Discord.Voice do
         module.play(guild_id, input, type)
 
       true ->
-        Logger.debug("EDA.Voice.play/4 unavailable; dropping playback opts #{inspect(opts)}")
-        module.play(guild_id, input, type)
+        {:error, :volume_options_unsupported}
     end
   end
 

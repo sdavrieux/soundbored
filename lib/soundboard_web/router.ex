@@ -55,10 +55,15 @@ defmodule SoundboardWeb.Router do
       :require_browser_basic_auth
     ]
 
-    live "/", SoundboardLive
-    live "/stats", StatsLive
-    live "/favorites", FavoritesLive
-    live "/settings", SettingsLive
+    live_session :studio, on_mount: [SoundboardWeb.Live.Support.StudioControls] do
+      live "/", SoundboardLive
+      live "/moments", MomentsLive
+      live "/stats", StatsLive
+      live "/favorites", FavoritesLive
+      live "/settings", SettingsLive
+    end
+
+    get "/moments/:name/audio", RecordingController, :preview
     get "/recordings/:name", RecordingController, :show
   end
 

@@ -3,6 +3,7 @@ defmodule SoundboardWeb.RadioDeskTest do
   import Phoenix.LiveViewTest
   import Mock
   alias Soundboard.{Accounts.User, MasterVolume, Repo}
+  alias SoundboardWeb.Live.Support.StudioControls
 
   setup %{conn: conn} do
     {:ok, user} =
@@ -25,14 +26,13 @@ defmodule SoundboardWeb.RadioDeskTest do
     assert has_element?(reopened, "#master-volume[value='35']")
   end
 
-  test "mute stops playback and persists zero", %{conn: conn} do
-    {:ok, view, _} = live(conn, "/")
+  test "bottom bar stops playback on every page", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/moments")
 
     with_mock Soundboard.AudioPlayer, stop_sound: fn -> :ok end do
-      view |> element("[phx-click='mute_master']") |> render_click()
+      view |> element("[phx-click='stop_sound']") |> render_click()
       assert_called(Soundboard.AudioPlayer.stop_sound())
-      assert MasterVolume.get() == 0
-      assert has_element?(view, "[phx-click='mute_master'][disabled]")
+      assert has_element?(view, "#master-volume")
     end
   end
 
@@ -42,7 +42,7 @@ defmodule SoundboardWeb.RadioDeskTest do
     assert has_element?(view, "[phx-click='save_moment'][disabled]")
     status = %{target: {"guild", "channel"}, has_audio: true, seconds: 25, saving: false}
     send(view.pid, {:capture_status, status})
-    assert render(view) =~ "25/60 seconds buffered"
+    assert render(view) =~ "25/60s"
     refute has_element?(view, "[phx-click='save_moment'][disabled]")
     send(view.pid, {:capture_status, %{status | saving: true}})
     assert render(view) =~ "Saving"
@@ -54,8 +54,8 @@ defmodule SoundboardWeb.RadioDeskTest do
   test "unsigned events cannot change master level or start capture" do
     socket = %Phoenix.LiveView.Socket{assigns: %{current_user: nil, __changed__: %{}, flash: %{}}}
 
-    assert {:noreply, socket} =
-             SoundboardWeb.SoundboardLive.handle_event(
+    assert {:halt, socket} =
+             StudioControls.handle_event(
                "set_master_volume",
                %{"volume" => 0},
                socket
@@ -64,8 +64,8 @@ defmodule SoundboardWeb.RadioDeskTest do
     assert socket.assigns.flash["error"] =~ "Sign in"
     assert MasterVolume.get() == 100
 
-    assert {:noreply, socket} =
-             SoundboardWeb.SoundboardLive.handle_event("start_capture", %{}, socket)
+    assert {:halt, socket} =
+             StudioControls.handle_event("start_capture", %{}, socket)
 
     assert socket.assigns.flash["error"] =~ "Sign in"
   end

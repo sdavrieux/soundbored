@@ -460,6 +460,100 @@ defmodule SoundboardWeb.SoundboardLiveTest do
     end
   end
 
+  describe "bulk delete" do
+    setup %{user: user} do
+      {:ok, other_user} =
+        %User{}
+        |> User.changeset(%{
+          username: "other_#{System.unique_integer([:positive])}",
+          discord_id: Integer.to_string(System.unique_integer([:positive])),
+          avatar: "other.jpg"
+        })
+        |> Repo.insert()
+
+      second =
+        %Sound{}
+        |> Sound.changeset(%{filename: "second.mp3", source_type: "local", user_id: user.id})
+        |> Repo.insert!()
+
+      foreign =
+        %Sound{}
+        |> Sound.changeset(%{
+          filename: "foreign.mp3",
+          source_type: "local",
+          user_id: other_user.id
+        })
+        |> Repo.insert!()
+
+      {:ok, second: second, foreign: foreign}
+    end
+
+    test "deletes multiple selected sounds and their files", %{
+      conn: conn,
+      sound: sound,
+      second: second,
+      foreign: foreign
+    } do
+      uploads_dir = uploads_dir()
+      File.mkdir_p!(uploads_dir)
+      paths = Enum.map([sound, second], &Path.join(uploads_dir, &1.filename))
+      Enum.each(paths, &File.write!(&1, "test content"))
+
+      {:ok, view, _html} = live(conn, "/")
+
+      view |> element("#toggle-selecting") |> render_click()
+      view |> element("#select-sound-#{sound.id}") |> render_click()
+      view |> element("#select-sound-#{second.id}") |> render_click()
+
+      assert render(view) =~ "2 selected"
+
+      view |> element("#delete-selected") |> render_click()
+      assert has_element?(view, "#bulk-delete-modal", "second")
+
+      rendered = view |> element("#confirm-bulk-delete") |> render_click()
+
+      assert rendered =~ "Deleted 2 sounds"
+      assert Repo.get(Sound, sound.id) == nil
+      assert Repo.get(Sound, second.id) == nil
+      assert Repo.get(Sound, foreign.id)
+      Enum.each(paths, &refute(File.exists?(&1)))
+      refute has_element?(view, "#selection-toolbar")
+    end
+
+    test "sounds owned by other users cannot be selected", %{conn: conn, foreign: foreign} do
+      {:ok, view, _html} = live(conn, "/")
+
+      view |> element("#toggle-selecting") |> render_click()
+
+      assert has_element?(view, "#select-sound-#{foreign.id}[disabled]")
+
+      render_click(view, "toggle_select", %{"id" => to_string(foreign.id)})
+      assert render(view) =~ "0 selected"
+
+      view |> element("button", "Select all shown") |> render_click()
+      assert render(view) =~ "2 selected"
+
+      view |> element("#delete-selected") |> render_click()
+      view |> element("#confirm-bulk-delete") |> render_click()
+
+      assert Repo.get(Sound, foreign.id)
+      assert Repo.aggregate(Sound, :count) == 1
+    end
+
+    test "cancelling keeps the selection and the sounds", %{conn: conn, sound: sound} do
+      {:ok, view, _html} = live(conn, "/")
+
+      view |> element("#toggle-selecting") |> render_click()
+      view |> element("#select-sound-#{sound.id}") |> render_click()
+      view |> element("#delete-selected") |> render_click()
+      view |> element("[phx-click='hide_bulk_delete_confirm']") |> render_click()
+
+      refute has_element?(view, "#bulk-delete-modal")
+      assert render(view) =~ "1 selected"
+      assert Repo.get(Sound, sound.id)
+    end
+  end
+
   defp uploads_dir do
     Soundboard.UploadsPath.dir()
   end

@@ -7,7 +7,7 @@ defmodule SoundboardWeb.SoundboardLive do
   import UploadModal
   import SoundboardWeb.Components.Soundboard.TagComponents, only: [tag_filter_button: 1]
   alias Soundboard.{Favorites, PubSubTopics, Sounds}
-  alias SoundboardWeb.Live.SoundboardLive.{EditFlow, UploadFlow}
+  alias SoundboardWeb.Live.SoundboardLive.{BulkDeleteFlow, EditFlow, UploadFlow}
   alias SoundboardWeb.Live.Support.{FlashHelpers, SoundPlayback}
   alias SoundboardWeb.Soundboard.SoundFilter
   import SoundboardWeb.Live.Support.LiveTags, only: [all_tags: 1, tag_selected?: 2]
@@ -51,6 +51,7 @@ defmodule SoundboardWeb.SoundboardLive do
     |> assign(:show_all_tags, false)
     |> UploadFlow.assign_defaults()
     |> EditFlow.assign_defaults()
+    |> BulkDeleteFlow.assign_defaults()
     |> allow_upload(:audio,
       accept: ~w(audio/mpeg audio/wav audio/ogg audio/x-m4a),
       max_entries: 1,
@@ -207,10 +208,15 @@ defmodule SoundboardWeb.SoundboardLive do
     edit_open = socket.assigns[:edit_state] && socket.assigns.edit_state.show_modal
     upload_open = socket.assigns[:upload_state] && socket.assigns.upload_state.show_upload_modal
 
-    if edit_open || upload_open do
-      handle_event("close_modal", %{}, socket)
-    else
-      {:noreply, socket}
+    cond do
+      socket.assigns.show_bulk_delete_confirm ->
+        BulkDeleteFlow.hide_confirm(socket)
+
+      edit_open || upload_open ->
+        handle_event("close_modal", %{}, socket)
+
+      true ->
+        {:noreply, socket}
     end
   end
 
@@ -255,6 +261,41 @@ defmodule SoundboardWeb.SoundboardLive do
   end
 
   @impl true
+  def handle_event("toggle_selecting", _params, socket) do
+    BulkDeleteFlow.toggle_selecting(socket)
+  end
+
+  @impl true
+  def handle_event("toggle_select", %{"id" => id}, socket) do
+    BulkDeleteFlow.toggle_select(socket, id)
+  end
+
+  @impl true
+  def handle_event("select_visible", _params, socket) do
+    BulkDeleteFlow.select_visible(socket, visible_sounds(socket))
+  end
+
+  @impl true
+  def handle_event("clear_selection", _params, socket) do
+    BulkDeleteFlow.clear_selection(socket)
+  end
+
+  @impl true
+  def handle_event("show_bulk_delete_confirm", _params, socket) do
+    BulkDeleteFlow.show_confirm(socket)
+  end
+
+  @impl true
+  def handle_event("hide_bulk_delete_confirm", _params, socket) do
+    BulkDeleteFlow.hide_confirm(socket)
+  end
+
+  @impl true
+  def handle_event("delete_selected", _params, socket) do
+    BulkDeleteFlow.delete_selected(socket)
+  end
+
+  @impl true
   def handle_event("toggle_join_sound", _params, socket) do
     UploadFlow.toggle_join_sound(socket)
   end
@@ -279,14 +320,7 @@ defmodule SoundboardWeb.SoundboardLive do
 
   @impl true
   def handle_event("play_random", _params, socket) do
-    filtered_sounds =
-      filter_sounds(
-        socket.assigns.uploaded_files,
-        socket.assigns.search_query,
-        socket.assigns.selected_tags
-      )
-
-    case get_random_sound(filtered_sounds) do
+    case get_random_sound(visible_sounds(socket)) do
       nil ->
         {:noreply, socket}
 
@@ -344,7 +378,17 @@ defmodule SoundboardWeb.SoundboardLive do
   end
 
   defp load_sound_files(socket) do
-    assign(socket, :uploaded_files, Sounds.list_detailed())
+    socket
+    |> assign(:uploaded_files, Sounds.list_detailed())
+    |> BulkDeleteFlow.prune_selection()
+  end
+
+  defp visible_sounds(socket) do
+    filter_sounds(
+      socket.assigns.uploaded_files,
+      socket.assigns.search_query,
+      socket.assigns.selected_tags
+    )
   end
 
   defp get_random_sound([]), do: nil

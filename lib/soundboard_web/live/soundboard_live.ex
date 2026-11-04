@@ -100,13 +100,14 @@ defmodule SoundboardWeb.SoundboardLive do
         {:noreply, socket}
 
       tag ->
-        current_tag = List.first(socket.assigns.selected_tags)
-        selected_tags = if current_tag && current_tag.id == tag.id, do: [], else: [tag]
+        selected = socket.assigns.selected_tags
 
-        {:noreply,
-         socket
-         |> assign(:selected_tags, selected_tags)
-         |> assign(:search_query, "")}
+        selected =
+          if tag_selected?(tag, selected),
+            do: Enum.reject(selected, &(&1.id == tag.id)),
+            else: selected ++ [tag]
+
+        {:noreply, assign(socket, :selected_tags, selected)}
     end
   end
 
@@ -278,6 +279,11 @@ defmodule SoundboardWeb.SoundboardLive do
   @impl true
   def handle_event("clear_selection", _params, socket) do
     BulkDeleteFlow.clear_selection(socket)
+  end
+
+  @impl true
+  def handle_event("tag_selected", %{"tag" => tag_name}, socket) do
+    BulkDeleteFlow.tag_selected(socket, tag_name)
   end
 
   @impl true

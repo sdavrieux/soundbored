@@ -23,9 +23,42 @@ defmodule Soundboard.Capture.Moments do
        %{
          name: name,
          title: metadata["title"] || default_title(name),
+         tags: clean_tags(metadata["tags"]),
          revision: metadata["revision"] || "#{stat.size}-#{inspect(stat.mtime)}",
          duration: format.size / format.rate
        }}
+    end
+  end
+
+  @doc "Tags used by any saved moment, most used first."
+  def all_tags(moments \\ list()) do
+    moments
+    |> Enum.flat_map(& &1.tags)
+    |> Enum.frequencies()
+    |> Enum.sort_by(fn {tag, count} -> {-count, tag} end)
+    |> Enum.map(&elem(&1, 0))
+  end
+
+  @doc """
+  Sets the name and adds tags without touching the audio. Used right after a save,
+  so a blank title keeps the current one and tags are merged, not replaced.
+  """
+  def label(name, attrs) do
+    locked(name, fn ->
+      with {:ok, moment} <- get(name),
+           {:ok, path} <- Storage.download_path(name),
+           tags = clean_tags(moment.tags ++ clean_tags(attrs["tags"])),
+           :ok <- write_metadata(path, label_title(moment, attrs["title"]), tags) do
+        notify(name)
+        get(name)
+      end
+    end)
+  end
+
+  defp label_title(moment, title) do
+    case String.trim(to_string(title || "")) do
+      "" -> moment.title
+      title -> String.slice(title, 0, 100)
     end
   end
 
@@ -49,12 +82,13 @@ defmodule Soundboard.Capture.Moments do
     with {:ok, moment} <- current(name, revision),
          {:ok, title, start, stop} <- selection(moment, attrs),
          {:ok, path} <- Storage.download_path(name) do
-      with_segment(path, start, stop, fn segment -> operation.(segment, title, path) end)
+      tags = clean_tags(attrs["tags"])
+      with_segment(path, start, stop, fn segment -> operation.(segment, {title, tags}, path) end)
     end
   end
 
-  defp replace_segment(segment, title, path) do
-    with :ok <- write_metadata(path, title), :ok <- File.rename(segment, path) do
+  defp replace_segment(segment, {title, tags}, path) do
+    with :ok <- write_metadata(path, title, tags), :ok <- File.rename(segment, path) do
       name = Path.basename(path)
       notify(name)
       get(name)
@@ -71,13 +105,13 @@ defmodule Soundboard.Capture.Moments do
     end
   end
 
-  defp publish_segment(segment, title, user) do
+  defp publish_segment(segment, {title, tags}, user) do
     user
     |> Sounds.new_create_request(%{
       source_type: "local",
       name: title,
       upload: %{path: segment, filename: "moment.wav"},
-      tags: ["moments"],
+      tags: Enum.uniq(["moments" | tags]),
       volume: 100,
       is_join_sound: false,
       is_leave_sound: false
@@ -212,17 +246,34 @@ defmodule Soundboard.Capture.Moments do
          else: (_ -> %{})
   end
 
-  defp write_metadata(path, title) do
+  defp write_metadata(path, title, tags) do
     temp = path <> ".#{id()}.json"
+    data = Jason.encode!(%{title: title, tags: tags, revision: id()})
 
     try do
-      with :ok <- File.write(temp, Jason.encode!(%{title: title, revision: id()}), [:exclusive]),
+      with :ok <- File.write(temp, data, [:exclusive]),
            :ok <- File.chmod(temp, 0o600),
            do: File.rename(temp, path <> ".json")
     after
       File.rm(temp)
     end
   end
+
+  @max_tags 12
+
+  @doc "Lowercased, trimmed, unique tags from a list or a comma-separated string."
+  def clean_tags(tags) when is_binary(tags), do: tags |> String.split(",") |> clean_tags()
+
+  def clean_tags(tags) when is_list(tags) do
+    tags
+    |> Enum.filter(&is_binary/1)
+    |> Enum.map(&(&1 |> String.trim() |> String.downcase() |> String.slice(0, 30)))
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+    |> Enum.take(@max_tags)
+  end
+
+  def clean_tags(_), do: []
 
   defp default_title(name),
     do: "Moment #{String.slice(name, 7, 8)} · #{String.slice(name, 16, 6)}"

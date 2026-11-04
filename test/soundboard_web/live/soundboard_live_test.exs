@@ -119,6 +119,32 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       end
     end
 
+    test "several tags can be selected and narrow the grid together", %{conn: conn, user: user} do
+      funny = %Tag{} |> Tag.changeset(%{name: "funny"}) |> Repo.insert!()
+      sam = %Tag{} |> Tag.changeset(%{name: "sam"}) |> Repo.insert!()
+
+      for {name, tags} <- [{"both.mp3", [funny, sam]}, {"only-funny.mp3", [funny]}] do
+        %Sound{}
+        |> Sound.changeset(%{filename: name, source_type: "local", user_id: user.id, tags: tags})
+        |> Repo.insert!()
+      end
+
+      {:ok, view, _html} = live(conn, "/")
+      chip = fn tag -> element(view, "div.hidden.sm\\:flex button[phx-value-tag='#{tag}']") end
+
+      render_click(chip.("funny"))
+      html = render_click(chip.("sam"))
+      assert html =~ "both"
+      refute html =~ "only-funny"
+      assert has_element?(view, "button[phx-value-tag='sam'][aria-pressed='true']")
+
+      html = render_click(chip.("sam"))
+      assert html =~ "only-funny"
+
+      view |> element("#clear-tag-filters") |> render_click()
+      refute has_element?(view, "button[aria-pressed='true']")
+    end
+
     test "can open and close upload modal", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/")
 
@@ -457,6 +483,41 @@ defmodule SoundboardWeb.SoundboardLiveTest do
 
       # Just verify the view is still alive
       assert render(view) =~ "SoundBored"
+    end
+  end
+
+  describe "bulk tag" do
+    test "adds a tag to every selected sound and keeps existing tags", %{
+      conn: conn,
+      user: user,
+      sound: sound
+    } do
+      old = %Tag{} |> Tag.changeset(%{name: "old"}) |> Repo.insert!()
+
+      other =
+        %Sound{}
+        |> Sound.changeset(%{
+          filename: "other.mp3",
+          source_type: "local",
+          user_id: user.id,
+          tags: [old]
+        })
+        |> Repo.insert!()
+
+      {:ok, view, _html} = live(conn, "/")
+      view |> element("#toggle-selecting") |> render_click()
+      render_click(view, "toggle_select", %{"id" => to_string(sound.id)})
+      render_click(view, "toggle_select", %{"id" => to_string(other.id)})
+
+      html = view |> form("#tag-selected", tag: " Talking ") |> render_submit()
+      assert html =~ "Tagged 2 sounds"
+
+      names = fn id ->
+        Sound |> Repo.get!(id) |> Repo.preload(:tags) |> Map.get(:tags) |> Enum.map(& &1.name)
+      end
+
+      assert names.(sound.id) == ["talking"]
+      assert Enum.sort(names.(other.id)) == ["old", "talking"]
     end
   end
 

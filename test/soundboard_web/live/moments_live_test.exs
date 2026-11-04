@@ -70,4 +70,22 @@ defmodule SoundboardWeb.MomentsLiveTest do
     assert render_async(view) =~ "changed in another session"
     assert {:ok, %{title: "Other session"}} = Moments.get(name)
   end
+
+  test "search and several tags narrow the moment list", %{conn: conn, dir: dir} do
+    first = MomentFixtures.create(dir, "aaaaaaaaaaaaaaaa")
+    second = MomentFixtures.create(dir, "bbbbbbbbbbbbbbbb")
+    {:ok, _} = Moments.label(first, %{"title" => "Raid wipe", "tags" => "sam, fail"})
+    {:ok, _} = Moments.label(second, %{"title" => "Sam joke", "tags" => "sam, funny"})
+    {:ok, view, _} = live(conn, "/moments")
+
+    view |> element("button[phx-value-tag=sam]") |> render_click()
+    html = view |> element("button[phx-value-tag=fail]") |> render_click()
+    assert html =~ "Raid wipe"
+    refute html =~ "Sam joke"
+
+    view |> element("[phx-click=clear_moment_tags]") |> render_click()
+    html = view |> element("form[phx-change=search_moments]") |> render_change(%{query: "joke"})
+    assert html =~ "Sam joke"
+    refute html =~ "Raid wipe"
+  end
 end

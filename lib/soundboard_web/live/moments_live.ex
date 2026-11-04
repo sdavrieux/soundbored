@@ -13,10 +13,25 @@ defmodule SoundboardWeb.MomentsLive do
      |> assign(:current_path, "/moments")
      |> assign(:moments, Moments.list())
      |> assign(:selected, nil)
+     |> assign(:query, "")
+     |> assign(:tag_filter, [])
      |> assign(:busy, false)}
   end
 
   @impl true
+  def handle_event("search_moments", %{"query" => query}, socket),
+    do: {:noreply, assign(socket, :query, query)}
+
+  def handle_event("toggle_moment_tag", %{"tag" => tag}, socket) do
+    filter = socket.assigns.tag_filter
+
+    filter = if tag in filter, do: List.delete(filter, tag), else: filter ++ [tag]
+    {:noreply, assign(socket, :tag_filter, filter)}
+  end
+
+  def handle_event("clear_moment_tags", _, socket),
+    do: {:noreply, assign(socket, :tag_filter, [])}
+
   def handle_event("select_moment", %{"name" => name}, socket) do
     case Moments.get(name) do
       {:ok, moment} -> {:noreply, select(socket, moment)}
@@ -113,12 +128,29 @@ defmodule SoundboardWeb.MomentsLive do
       |> assign(:selected, moment)
       |> assign(:selection, %{
         "title" => moment.title,
+        "tags" => Enum.join(moment.tags, ", "),
         "start" => "0",
         "stop" => to_string(moment.duration)
       })
 
+  @doc "Moments carrying every chosen tag whose name or tags contain the query."
+  def visible(moments, query, tags) do
+    query = query |> String.trim() |> String.downcase()
+
+    Enum.filter(moments, fn moment ->
+      Enum.all?(tags, &(&1 in moment.tags)) and
+        (query == "" or String.contains?(String.downcase(moment.title), query) or
+           Enum.any?(moment.tags, &String.contains?(&1, query)))
+    end)
+  end
+
   @impl true
   def render(assigns) do
+    assigns =
+      assigns
+      |> assign(:visible, visible(assigns.moments, assigns.query, assigns.tag_filter))
+      |> assign(:all_tags, Moments.all_tags(assigns.moments))
+
     ~H"""
     <div class="max-w-6xl mx-auto px-4 py-8 text-gray-800 dark:text-gray-100">
       <h1 class="text-3xl font-bold mb-8">Saved moments</h1>
@@ -129,9 +161,51 @@ defmodule SoundboardWeb.MomentsLive do
         </.link>
       </div>
       <div :if={@moments != []} class="grid lg:grid-cols-[280px_minmax(0,1fr)] gap-6">
-        <div class="space-y-3" aria-label="Saved recordings">
+        <div class="space-y-3 min-w-0" aria-label="Saved recordings">
+          <form phx-change="search_moments" phx-submit="search_moments" role="search">
+            <label for="moment-search" class="sr-only">Search moments</label>
+            <input
+              id="moment-search"
+              type="search"
+              name="query"
+              value={@query}
+              placeholder="Search names and tags"
+              phx-debounce="200"
+              autocomplete="off"
+              class="moment-field text-base"
+            />
+          </form>
+          <div :if={@all_tags != []} class="flex flex-wrap gap-2" aria-label="Filter by tag">
+            <button
+              :for={tag <- @all_tags}
+              type="button"
+              phx-click="toggle_moment_tag"
+              phx-value-tag={tag}
+              aria-pressed={to_string(tag in @tag_filter)}
+              class={[
+                "min-h-[36px] rounded-full px-3 text-sm font-medium border",
+                if(tag in @tag_filter,
+                  do: "bg-blue-600 border-blue-600 text-white",
+                  else: "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-200"
+                )
+              ]}
+            >
+              {tag}
+            </button>
+            <button
+              :if={@tag_filter != []}
+              type="button"
+              phx-click="clear_moment_tags"
+              class="min-h-[36px] px-2 text-sm underline text-gray-600 dark:text-gray-300"
+            >
+              Clear
+            </button>
+          </div>
+          <p :if={@visible == []} class="text-sm text-gray-600 dark:text-gray-300">
+            No moments match. Try fewer tags.
+          </p>
           <button
-            :for={moment <- @moments}
+            :for={moment <- @visible}
             class="moment-list-item"
             phx-click="select_moment"
             phx-value-name={moment.name}
@@ -140,7 +214,8 @@ defmodule SoundboardWeb.MomentsLive do
           >
             <span class="block font-medium break-words">{moment.title}</span>
             <span class="block mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {Float.round(moment.duration, 2)} seconds
+              {Float.round(moment.duration, 1)} s
+              <span :if={moment.tags != []}>· {Enum.join(moment.tags, ", ")}</span>
             </span>
           </button>
         </div>
@@ -175,6 +250,19 @@ defmodule SoundboardWeb.MomentsLive do
                   class="moment-field mt-2"
                   disabled={@busy}
                 />
+              </label>
+              <label class="block">
+                Tags<input
+                  name="moment[tags]"
+                  value={@selection["tags"]}
+                  placeholder="funny, fail, raid"
+                  autocomplete="off"
+                  class="moment-field mt-2"
+                  disabled={@busy}
+                />
+                <span class="block mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Separate with commas. Published sounds get these tags too.
+                </span>
               </label>
               <div class="grid grid-cols-2 gap-4">
                 <label>

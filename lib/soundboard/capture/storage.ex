@@ -29,13 +29,15 @@ defmodule Soundboard.Capture.Storage do
     end
   end
 
-  def save(snapshot) do
-    with ffmpeg when is_binary(ffmpeg) <- System.find_executable("ffmpeg"),
+  @doc "Generates the filename a save will use, so the operator can name it while it exports."
+  def new_name,
+    do: "moment-#{Calendar.strftime(DateTime.utc_now(), "%Y%m%dT%H%M%SZ")}-#{random_id()}.wav"
+
+  def save(snapshot, name \\ new_name()) do
+    with true <- valid_name?(name),
+         ffmpeg when is_binary(ffmpeg) <- System.find_executable("ffmpeg"),
          :ok <- prepare_directory(),
          true <- length(list()) < @max_clips do
-      name =
-        "moment-#{Calendar.strftime(DateTime.utc_now(), "%Y%m%dT%H%M%SZ")}-#{random_id()}.wav"
-
       work = Path.join(directory(), ".export-#{random_id()}")
 
       with :ok <- File.mkdir(work), :ok <- File.chmod(work, 0o700) do
@@ -47,7 +49,7 @@ defmodule Soundboard.Capture.Storage do
       end
     else
       nil -> {:error, :ffmpeg_missing}
-      false -> {:error, :storage_full}
+      false -> if valid_name?(name), do: {:error, :storage_full}, else: {:error, :invalid_name}
       _ -> {:error, :storage_unavailable}
     end
   end

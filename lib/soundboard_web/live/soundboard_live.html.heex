@@ -91,7 +91,8 @@
     if @show_all_tags do
       tags
     else
-      Enum.take(tags, 12)
+      # Chosen tags stay visible on phones even when they are past the first 12.
+      @selected_tags ++ Enum.take(Enum.reject(tags, &tag_selected?(&1, @selected_tags)), 12)
     end %>
   <div class="mb-4 flex flex-wrap gap-2 items-center sm:hidden">
     <%= for tag <- limited_tags do %>
@@ -101,7 +102,7 @@
         uploaded_files={@uploaded_files}
       />
     <% end %>
-    <%= if length(tags) > 12 do %>
+    <%= if length(tags) > length(limited_tags) or @show_all_tags do %>
       <button
         phx-click="toggle_tag_list"
         class="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium
@@ -121,10 +122,25 @@
     <% end %>
   </div>
 
-  <div class="flex justify-between items-center mb-2">
-    <div class="text-sm text-gray-600 dark:text-gray-400">
-      <p style="font-weight: bold">Total Sounds: {length(@uploaded_files)}</p>
-    </div>
+  <% shown = filter_sounds(@uploaded_files, @search_query, @selected_tags) %>
+  <div class="flex flex-wrap gap-x-3 items-center mb-2 text-sm text-gray-600 dark:text-gray-400">
+    <p class="font-semibold">
+      <%= if @selected_tags != [] or @search_query != "" do %>
+        Showing {length(shown)} of {length(@uploaded_files)} sounds
+      <% else %>
+        {length(@uploaded_files)} sounds
+      <% end %>
+    </p>
+    <%= if @selected_tags != [] do %>
+      <span>with all of: {Enum.map_join(@selected_tags, ", ", & &1.name)}</span>
+      <button
+        id="clear-tag-filters"
+        phx-click="clear_tag_filters"
+        class="min-h-[36px] underline text-blue-600 dark:text-blue-300"
+      >
+        Clear tags
+      </button>
+    <% end %>
   </div>
   <%= if @selecting do %>
     <div
@@ -138,6 +154,30 @@
       <span class="text-xs text-gray-500 dark:text-gray-400">
         Only sounds you uploaded can be selected.
       </span>
+      <form
+        id="tag-selected"
+        phx-submit="tag_selected"
+        class="flex gap-2 w-full sm:w-auto"
+      >
+        <label for="tag-selected-input" class="sr-only">Tag to add to selected sounds</label>
+        <input
+          id="tag-selected-input"
+          name="tag"
+          autocomplete="off"
+          placeholder="Add tag to selected"
+          disabled={MapSet.size(@selected_ids) == 0}
+          class="flex-1 min-w-0 rounded-md border-gray-300 dark:border-gray-600 text-base sm:text-sm
+                 dark:bg-gray-700 dark:text-gray-100 disabled:opacity-45"
+        />
+        <button
+          type="submit"
+          disabled={MapSet.size(@selected_ids) == 0}
+          class="px-3 py-1.5 rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700
+                 disabled:opacity-45 disabled:cursor-not-allowed"
+        >
+          Add tag
+        </button>
+      </form>
       <div class="ml-auto flex flex-wrap gap-2">
         <button
           phx-click="select_visible"
@@ -175,7 +215,12 @@
         </div>
       </div>
     <% else %>
-      <%= for sound <- filter_sounds(@uploaded_files, @search_query, @selected_tags) do %>
+      <%= if shown == [] and @uploaded_files != [] do %>
+        <p class="col-span-full text-sm text-gray-600 dark:text-gray-400">
+          No sounds match. Remove a tag or clear the search.
+        </p>
+      <% end %>
+      <%= for sound <- shown do %>
         <% selected = MapSet.member?(@selected_ids, sound.id) %>
         <% selectable = @selecting && BulkDeleteFlow.deletable?(sound, assigns) %>
         <div class={[

@@ -33,13 +33,16 @@ FFmpeg with libopus and Unix `sh`/`mkfifo`, included in the Alpine image.
 
 1. Join a Discord voice channel. Have the bot join with `!join` or play a sound.
 2. Let participants know you are enabling capture, then tap **Start capture**.
-3. After something memorable happens, tap **Save last 60 seconds**.
-4. Open **Saved moments** from the sidebar and select a recording.
+3. After something memorable happens, tap **Save last 60 seconds**. The audio is
+   frozen at once; a sheet then asks for a name and tags while it exports.
+   Signed-in speakers are tagged automatically. **Skip** keeps a dated name.
+4. Open **Saved moments** from the sidebar and select a recording. Search by name
+   or tap several tags to show only moments that have all of them.
 5. Play it, choose start/end using the sliders or exact second fields, and use
    **Preview selection** to hear the trim.
 6. **Save changes** replaces the private recording with the chosen range and
    name. **Publish to Sounds** creates a dashboard sound from the current range,
-   leaving the private recording unchanged. Published clips receive a moments tag.
+   leaving the private recording unchanged. Published clips receive a moments tag plus the moment's own tags.
 7. **Download WAV** exports a private copy. **Delete moment** asks for confirmation
    and removes the private recording; published dashboard sounds remain separate.
 

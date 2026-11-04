@@ -84,7 +84,7 @@ defmodule SoundboardWeb.FavoritesLiveTest do
       |> element("[phx-click='toggle_favorite'][phx-value-sound-id='#{sound.id}']")
       |> render_click()
 
-    assert html =~ "Favorites updated!"
+    assert html =~ "Favorites updated"
     assert html =~ "You currently have no favorites"
   end
 

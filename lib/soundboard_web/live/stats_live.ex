@@ -122,9 +122,9 @@ defmodule SoundboardWeb.StatsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="stats" class="max-w-6xl mx-auto px-4 py-8">
-      <div class="flex justify-between items-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-100">Stats</h1>
+    <div id="stats" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Stats</h1>
         <div class="flex items-center gap-4">
           <button
             phx-click="previous_week"

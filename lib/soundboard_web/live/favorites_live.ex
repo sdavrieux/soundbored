@@ -40,7 +40,7 @@ defmodule SoundboardWeb.FavoritesLive do
             {:noreply,
              socket
              |> assign_favorites_state(user)
-             |> put_flash(:info, "Favorites updated!")}
+             |> put_flash(:info, "Favorites updated")}
 
           {:error, reason} ->
             {:noreply, put_flash(socket, :error, Favorites.error_message(reason))}

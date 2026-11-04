@@ -71,8 +71,8 @@ defmodule SoundboardWeb.SettingsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-6xl mx-auto px-4 py-6 space-y-6">
-      <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Settings</h1>
+    <div class="page space-y-6">
+      <h1 class="page-title">Settings</h1>
 
       <section aria-labelledby="api-tokens-heading" class="space-y-6">
         <header class="space-y-2">

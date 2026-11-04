@@ -1,6 +1,7 @@
 defmodule SoundboardWeb.Components.Soundboard.RadioDesk do
   @moduledoc false
   use Phoenix.Component
+  import SoundboardWeb.CoreComponents, only: [icon: 1]
   alias Phoenix.LiveView.JS
 
   attr :volume, :integer, required: true
@@ -12,7 +13,8 @@ defmodule SoundboardWeb.Components.Soundboard.RadioDesk do
     <section class="studio-controls" aria-label="Playback controls">
       <div class="master-control">
         <label for="master-volume">
-          Master volume <span id="master-volume-value">{@volume}%</span>
+          <span><.volume_icon volume={@volume} /> Master volume</span>
+          <span id="master-volume-value">{@volume}%</span>
         </label>
         <input
           id="master-volume"
@@ -25,20 +27,64 @@ defmodule SoundboardWeb.Components.Soundboard.RadioDesk do
           aria-label="Master volume"
         />
       </div>
-      <button type="button" phx-click="stop_sound" class="studio-button stop-button">Stop</button>
-      <button
-        type="button"
-        phx-click="save_moment"
-        disabled={not @capture.has_audio or @capture.saving}
-        class="studio-button save-button"
-      >
-        {if @capture.saving, do: "Saving…", else: "Save last 60 seconds"}
-      </button>
-      <span id="capture-indicator" class="capture-status" aria-live="polite">
-        {if @capture.target, do: "● #{@capture.seconds}/60s", else: "Capture off"}
+      <div class="desk-buttons">
+        <button
+          :if={!@capture.target}
+          id="capture-toggle"
+          type="button"
+          phx-click="start_capture"
+          class="studio-button capture-button"
+          title="Keep the last minute of the voice channel in memory"
+        >
+          <span class="capture-dot is-off" aria-hidden="true"></span> Start capture
+        </button>
+        <button
+          :if={@capture.target}
+          id="capture-toggle"
+          type="button"
+          phx-click="stop_capture"
+          data-confirm="Stop capture? Audio that is not saved yet will be discarded."
+          class="studio-button capture-button is-live"
+          aria-label={"Capturing, #{@capture.seconds} of 60 seconds buffered. Stop capture"}
+        >
+          <span class="capture-dot" aria-hidden="true"></span>
+          <span id="capture-indicator">{@capture.seconds}/60s</span>
+        </button>
+        <button
+          type="button"
+          phx-click="save_moment"
+          disabled={not @capture.has_audio or @capture.saving}
+          class="studio-button save-button"
+          title={if @capture.target, do: "Save the last 60 seconds", else: "Start capture first"}
+        >
+          <.icon name="hero-bookmark-solid" class="w-5 h-5" />
+          {if @capture.saving, do: "Saving…", else: "Save last 60s"}
+        </button>
+        <button
+          type="button"
+          phx-click="stop_sound"
+          class="studio-button stop-button"
+          aria-label="Stop all sounds"
+        >
+          <.icon name="hero-stop-solid" class="w-5 h-5" /> Stop
+        </button>
+      </div>
+      <span class="sr-only" aria-live="polite">
+        {if @capture.target, do: "Capture on", else: "Capture off"}
       </span>
     </section>
     <.name_sheet :if={@naming} naming={@naming} />
+    """
+  end
+
+  attr :volume, :integer, required: true
+
+  defp volume_icon(assigns) do
+    ~H"""
+    <.icon
+      name={if @volume == 0, do: "hero-speaker-x-mark", else: "hero-speaker-wave"}
+      class="w-4 h-4 inline-block align-[-3px]"
+    />
     """
   end
 
@@ -79,7 +125,7 @@ defmodule SoundboardWeb.Components.Soundboard.RadioDesk do
             autocomplete="off"
             placeholder="e.g. Sam's clutch save"
             phx-mounted={JS.focus()}
-            class="moment-field mt-1 text-base"
+            class="field mt-1"
           />
         </label>
         <fieldset :if={@naming.suggestions != []}>
@@ -102,7 +148,7 @@ defmodule SoundboardWeb.Components.Soundboard.RadioDesk do
             name="moment[new_tags]"
             autocomplete="off"
             placeholder="funny, fail, raid"
-            class="moment-field mt-1 text-base"
+            class="field mt-1"
           />
           <span class="mt-1 block text-xs font-normal text-gray-500 dark:text-gray-400">
             Separate with commas. Signed-in speakers are tagged automatically.
@@ -112,11 +158,11 @@ defmodule SoundboardWeb.Components.Soundboard.RadioDesk do
           <button
             type="button"
             phx-click="skip_naming"
-            class="studio-button flex-1 border border-gray-300 dark:border-gray-600"
+            class="studio-button btn-secondary flex-1"
           >
             Skip
           </button>
-          <button type="submit" class="studio-button flex-1 bg-blue-600 text-white">
+          <button type="submit" class="studio-button btn-primary flex-1">
             Save name
           </button>
         </div>

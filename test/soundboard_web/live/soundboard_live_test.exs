@@ -107,7 +107,7 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       {:ok, view, _html} = live(conn, "/")
 
       view
-      |> element("div.hidden.sm\\:flex button[phx-value-tag='funny']")
+      |> element("#tag-filters button[phx-value-tag='funny']")
       |> render_click()
 
       with_mock Soundboard.AudioPlayer, play_sound: fn _, _ -> :ok end do
@@ -130,7 +130,7 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       end
 
       {:ok, view, _html} = live(conn, "/")
-      chip = fn tag -> element(view, "div.hidden.sm\\:flex button[phx-value-tag='#{tag}']") end
+      chip = fn tag -> element(view, "#tag-filters button[phx-value-tag='#{tag}']") end
 
       render_click(chip.("funny"))
       html = render_click(chip.("sam"))
@@ -148,8 +148,8 @@ defmodule SoundboardWeb.SoundboardLiveTest do
     test "can open and close upload modal", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/")
 
-      # First verify we can see the Add Sound button
-      assert render(view) =~ "Add Sound"
+      # First verify we can see the Add sound button
+      assert render(view) =~ "Add sound"
 
       # Click the Add Sound button and verify modal appears
       view

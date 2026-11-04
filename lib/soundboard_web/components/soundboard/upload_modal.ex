@@ -7,15 +7,15 @@ defmodule SoundboardWeb.Components.Soundboard.UploadModal do
 
   def upload_modal(assigns) do
     ~H"""
-    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-10">
-      <div class="fixed inset-0 z-10 overflow-y-auto">
-        <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-          <div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-            <div class="absolute right-0 top-0 pr-4 pt-4">
+    <div class="fixed inset-0 bg-gray-900/60 transition-opacity z-50">
+      <div class="fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex min-h-full items-end justify-center pt-12 text-center sm:items-center sm:p-4">
+          <div class="sheet-panel relative transform overflow-hidden bg-white dark:bg-gray-800 px-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+            <div class="absolute right-0 top-0 pr-2 pt-2">
               <button
                 phx-click="close_upload_modal"
                 type="button"
-                class="rounded-md bg-white dark:bg-gray-800 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                class="flex h-11 w-11 items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               >
                 <span class="sr-only">Close</span>
                 <svg
@@ -32,7 +32,7 @@ defmodule SoundboardWeb.Components.Soundboard.UploadModal do
 
             <div class="mt-3 text-center sm:mt-5">
               <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-gray-100 mb-4">
-                Add Sound
+                Add sound
               </h3>
 
               <form
@@ -243,7 +243,7 @@ defmodule SoundboardWeb.Components.Soundboard.UploadModal do
                              focus-visible:outline-offset-2 focus-visible:outline-blue-600
                              dark:focus-visible:outline-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Add Sound
+                    Add sound
                   </button>
                 </div>
               </form>

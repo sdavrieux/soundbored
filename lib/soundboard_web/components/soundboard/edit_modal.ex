@@ -29,18 +29,18 @@ defmodule SoundboardWeb.Components.Soundboard.EditModal do
 
     ~H"""
     <div
-      class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-10"
+      class="fixed inset-0 bg-gray-900/60 transition-opacity z-50"
       phx-window-keydown="close_modal_key"
       phx-key="Escape"
     >
-      <div class="fixed inset-0 z-10 overflow-y-auto">
-        <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-          <div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-            <div class="absolute right-0 top-0 pr-4 pt-4">
+      <div class="fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex min-h-full items-end justify-center pt-12 text-center sm:items-center sm:p-4">
+          <div class="sheet-panel relative transform overflow-hidden bg-white dark:bg-gray-800 px-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+            <div class="absolute right-0 top-0 pr-2 pt-2">
               <button
                 phx-click="close_modal"
                 type="button"
-                class="rounded-md bg-white dark:bg-gray-800 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                class="flex h-11 w-11 items-center justify-center rounded-md bg-white dark:bg-gray-800 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               >
                 <span class="sr-only">Close</span>
                 <svg

@@ -23,6 +23,8 @@ defmodule Soundboard.Capture.Moments do
        %{
          name: name,
          title: metadata["title"] || default_title(name),
+         titled: is_binary(metadata["title"]),
+         recorded_at: recorded_at(name),
          tags: clean_tags(metadata["tags"]),
          revision: metadata["revision"] || "#{stat.size}-#{inspect(stat.mtime)}",
          duration: format.size / format.rate
@@ -57,7 +59,7 @@ defmodule Soundboard.Capture.Moments do
 
   defp label_title(moment, title) do
     case String.trim(to_string(title || "")) do
-      "" -> moment.title
+      "" -> if moment.titled, do: moment.title
       title -> String.slice(title, 0, 100)
     end
   end
@@ -72,8 +74,9 @@ defmodule Soundboard.Capture.Moments do
 
   def publish(name, revision, attrs, user) do
     locked(name, fn ->
-      edit(name, revision, attrs, fn segment, title, _ ->
-        publish_segment(segment, title, user)
+      edit(name, revision, attrs, fn
+        _segment, {nil, _tags}, _ -> {:error, :untitled}
+        segment, title_and_tags, _ -> publish_segment(segment, title_and_tags, user)
       end)
     end)
   end
@@ -126,13 +129,14 @@ defmodule Soundboard.Capture.Moments do
   end
 
   defp selection(moment, attrs) do
+    # A blank name keeps the dated default; only publishing needs a real name.
     title = String.trim(to_string(attrs["title"] || ""))
 
-    with true <- String.length(title) in 1..100,
+    with true <- String.length(title) <= 100,
          {start, ""} <- Float.parse(to_string(attrs["start"])),
          {stop, ""} <- Float.parse(to_string(attrs["stop"])),
          true <- start >= 0 and stop - start >= 0.05 and stop <= moment.duration + 0.001 do
-      {:ok, title, start, min(stop, moment.duration)}
+      {:ok, if(title != "", do: title), start, min(stop, moment.duration)}
     else
       _ -> {:error, :invalid_selection}
     end
@@ -275,8 +279,21 @@ defmodule Soundboard.Capture.Moments do
 
   def clean_tags(_), do: []
 
-  defp default_title(name),
-    do: "Moment #{String.slice(name, 7, 8)} · #{String.slice(name, 16, 6)}"
+  # The browser shows untitled moments in local time; this is the UTC fallback.
+  defp default_title(name) do
+    case recorded_at(name) do
+      nil -> "Untitled moment"
+      iso -> "Moment #{String.slice(iso, 0, 10)} #{String.slice(iso, 11, 5)} UTC"
+    end
+  end
+
+  defp recorded_at(
+         <<"moment-", y::binary-4, mo::binary-2, d::binary-2, "T", h::binary-2, mi::binary-2,
+           s::binary-2, "Z", _::binary>>
+       ),
+       do: "#{y}-#{mo}-#{d}T#{h}:#{mi}:#{s}Z"
+
+  defp recorded_at(_), do: nil
 
   defp id, do: Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
 

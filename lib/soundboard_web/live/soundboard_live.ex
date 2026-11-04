@@ -6,6 +6,7 @@ defmodule SoundboardWeb.SoundboardLive do
   import DeleteModal
   import UploadModal
   import SoundboardWeb.Components.Soundboard.TagComponents, only: [tag_filter_button: 1]
+  import SoundboardWeb.Components.Soundboard.SoundCard, only: [sound_card: 1]
   alias Soundboard.{Favorites, PubSubTopics, Sounds}
   alias SoundboardWeb.Live.SoundboardLive.{BulkDeleteFlow, EditFlow, UploadFlow}
   alias SoundboardWeb.Live.Support.{FlashHelpers, SoundPlayback}
@@ -48,7 +49,7 @@ defmodule SoundboardWeb.SoundboardLive do
     |> assign(:search_query, "")
     |> assign(:editing, nil)
     |> assign(:selected_tags, [])
-    |> assign(:show_all_tags, false)
+    |> assign(:only_favorites, false)
     |> UploadFlow.assign_defaults()
     |> EditFlow.assign_defaults()
     |> BulkDeleteFlow.assign_defaults()
@@ -79,8 +80,17 @@ defmodule SoundboardWeb.SoundboardLive do
   end
 
   @impl true
-  def handle_event("toggle_tag_list", _params, socket) do
-    {:noreply, assign(socket, :show_all_tags, !socket.assigns.show_all_tags)}
+  def handle_event("toggle_favorites_filter", _params, socket) do
+    {:noreply, assign(socket, :only_favorites, !socket.assigns.only_favorites)}
+  end
+
+  @impl true
+  def handle_event("clear_all_filters", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:selected_tags, [])
+     |> assign(:only_favorites, false)
+     |> assign(:search_query, "")}
   end
 
   @impl true
@@ -113,7 +123,7 @@ defmodule SoundboardWeb.SoundboardLive do
 
   @impl true
   def handle_event("clear_tag_filters", _, socket) do
-    {:noreply, assign(socket, :selected_tags, [])}
+    {:noreply, socket |> assign(:selected_tags, []) |> assign(:only_favorites, false)}
   end
 
   @impl true
@@ -235,10 +245,8 @@ defmodule SoundboardWeb.SoundboardLive do
       user ->
         case Favorites.toggle_favorite(user.id, sound_id) do
           {:ok, _favorite} ->
-            {:noreply,
-             socket
-             |> assign_favorites(user)
-             |> put_flash(:info, "Favorites updated!")}
+            # The heart itself shows the change; a flash for every tap is noise.
+            {:noreply, assign_favorites(socket, user)}
 
           {:error, reason} ->
             {:noreply, put_flash(socket, :error, Favorites.error_message(reason))}
@@ -389,12 +397,14 @@ defmodule SoundboardWeb.SoundboardLive do
     |> BulkDeleteFlow.prune_selection()
   end
 
-  defp visible_sounds(socket) do
-    filter_sounds(
-      socket.assigns.uploaded_files,
-      socket.assigns.search_query,
-      socket.assigns.selected_tags
-    )
+  defp visible_sounds(socket), do: shown_sounds(socket.assigns)
+
+  defp shown_sounds(assigns) do
+    sounds = filter_sounds(assigns.uploaded_files, assigns.search_query, assigns.selected_tags)
+
+    if assigns.only_favorites,
+      do: Enum.filter(sounds, &(&1.id in assigns.favorites)),
+      else: sounds
   end
 
   defp get_random_sound([]), do: nil

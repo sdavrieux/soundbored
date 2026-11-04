@@ -23,9 +23,44 @@ defmodule Soundboard.Capture.Moments do
        %{
          name: name,
          title: metadata["title"] || default_title(name),
+         titled: is_binary(metadata["title"]),
+         recorded_at: recorded_at(name),
+         tags: clean_tags(metadata["tags"]),
          revision: metadata["revision"] || "#{stat.size}-#{inspect(stat.mtime)}",
          duration: format.size / format.rate
        }}
+    end
+  end
+
+  @doc "Tags used by any saved moment, most used first."
+  def all_tags(moments \\ list()) do
+    moments
+    |> Enum.flat_map(& &1.tags)
+    |> Enum.frequencies()
+    |> Enum.sort_by(fn {tag, count} -> {-count, tag} end)
+    |> Enum.map(&elem(&1, 0))
+  end
+
+  @doc """
+  Sets the name and adds tags without touching the audio. Used right after a save,
+  so a blank title keeps the current one and tags are merged, not replaced.
+  """
+  def label(name, attrs) do
+    locked(name, fn ->
+      with {:ok, moment} <- get(name),
+           {:ok, path} <- Storage.download_path(name),
+           tags = clean_tags(moment.tags ++ clean_tags(attrs["tags"])),
+           :ok <- write_metadata(path, label_title(moment, attrs["title"]), tags) do
+        notify(name)
+        get(name)
+      end
+    end)
+  end
+
+  defp label_title(moment, title) do
+    case String.trim(to_string(title || "")) do
+      "" -> if moment.titled, do: moment.title
+      title -> String.slice(title, 0, 100)
     end
   end
 
@@ -39,8 +74,9 @@ defmodule Soundboard.Capture.Moments do
 
   def publish(name, revision, attrs, user) do
     locked(name, fn ->
-      edit(name, revision, attrs, fn segment, title, _ ->
-        publish_segment(segment, title, user)
+      edit(name, revision, attrs, fn
+        _segment, {nil, _tags}, _ -> {:error, :untitled}
+        segment, title_and_tags, _ -> publish_segment(segment, title_and_tags, user)
       end)
     end)
   end
@@ -49,12 +85,13 @@ defmodule Soundboard.Capture.Moments do
     with {:ok, moment} <- current(name, revision),
          {:ok, title, start, stop} <- selection(moment, attrs),
          {:ok, path} <- Storage.download_path(name) do
-      with_segment(path, start, stop, fn segment -> operation.(segment, title, path) end)
+      tags = clean_tags(attrs["tags"])
+      with_segment(path, start, stop, fn segment -> operation.(segment, {title, tags}, path) end)
     end
   end
 
-  defp replace_segment(segment, title, path) do
-    with :ok <- write_metadata(path, title), :ok <- File.rename(segment, path) do
+  defp replace_segment(segment, {title, tags}, path) do
+    with :ok <- write_metadata(path, title, tags), :ok <- File.rename(segment, path) do
       name = Path.basename(path)
       notify(name)
       get(name)
@@ -71,13 +108,13 @@ defmodule Soundboard.Capture.Moments do
     end
   end
 
-  defp publish_segment(segment, title, user) do
+  defp publish_segment(segment, {title, tags}, user) do
     user
     |> Sounds.new_create_request(%{
       source_type: "local",
       name: title,
       upload: %{path: segment, filename: "moment.wav"},
-      tags: ["moments"],
+      tags: Enum.uniq(["moments" | tags]),
       volume: 100,
       is_join_sound: false,
       is_leave_sound: false
@@ -92,13 +129,14 @@ defmodule Soundboard.Capture.Moments do
   end
 
   defp selection(moment, attrs) do
+    # A blank name keeps the dated default; only publishing needs a real name.
     title = String.trim(to_string(attrs["title"] || ""))
 
-    with true <- String.length(title) in 1..100,
+    with true <- String.length(title) <= 100,
          {start, ""} <- Float.parse(to_string(attrs["start"])),
          {stop, ""} <- Float.parse(to_string(attrs["stop"])),
          true <- start >= 0 and stop - start >= 0.05 and stop <= moment.duration + 0.001 do
-      {:ok, title, start, min(stop, moment.duration)}
+      {:ok, if(title != "", do: title), start, min(stop, moment.duration)}
     else
       _ -> {:error, :invalid_selection}
     end
@@ -212,11 +250,12 @@ defmodule Soundboard.Capture.Moments do
          else: (_ -> %{})
   end
 
-  defp write_metadata(path, title) do
+  defp write_metadata(path, title, tags) do
     temp = path <> ".#{id()}.json"
+    data = Jason.encode!(%{title: title, tags: tags, revision: id()})
 
     try do
-      with :ok <- File.write(temp, Jason.encode!(%{title: title, revision: id()}), [:exclusive]),
+      with :ok <- File.write(temp, data, [:exclusive]),
            :ok <- File.chmod(temp, 0o600),
            do: File.rename(temp, path <> ".json")
     after
@@ -224,8 +263,37 @@ defmodule Soundboard.Capture.Moments do
     end
   end
 
-  defp default_title(name),
-    do: "Moment #{String.slice(name, 7, 8)} · #{String.slice(name, 16, 6)}"
+  @max_tags 12
+
+  @doc "Lowercased, trimmed, unique tags from a list or a comma-separated string."
+  def clean_tags(tags) when is_binary(tags), do: tags |> String.split(",") |> clean_tags()
+
+  def clean_tags(tags) when is_list(tags) do
+    tags
+    |> Enum.filter(&is_binary/1)
+    |> Enum.map(&(&1 |> String.trim() |> String.downcase() |> String.slice(0, 30)))
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+    |> Enum.take(@max_tags)
+  end
+
+  def clean_tags(_), do: []
+
+  # The browser shows untitled moments in local time; this is the UTC fallback.
+  defp default_title(name) do
+    case recorded_at(name) do
+      nil -> "Untitled moment"
+      iso -> "Moment #{String.slice(iso, 0, 10)} #{String.slice(iso, 11, 5)} UTC"
+    end
+  end
+
+  defp recorded_at(
+         <<"moment-", y::binary-4, mo::binary-2, d::binary-2, "T", h::binary-2, mi::binary-2,
+           s::binary-2, "Z", _::binary>>
+       ),
+       do: "#{y}-#{mo}-#{d}T#{h}:#{mi}:#{s}Z"
+
+  defp recorded_at(_), do: nil
 
   defp id, do: Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
 

@@ -80,6 +80,41 @@ defmodule SoundboardWeb.Live.SoundboardLive.BulkDeleteFlow do
     {:noreply, socket}
   end
 
+  @doc "Adds one tag to every selected sound, keeping their other tags."
+  def tag_selected(socket, tag_name) do
+    with sounds when sounds != [] <- selected_sounds(socket.assigns),
+         {:ok, tag} <- LiveTags.add_tag(tag_name, [], fn tag, _ -> {:ok, tag} end) do
+      failed =
+        Enum.count(sounds, fn sound ->
+          tags = Enum.uniq_by(sound.tags ++ [tag], & &1.id)
+          match?({:error, _}, LiveTags.update_sound_tags(sound, tags))
+        end)
+
+      LiveTags.broadcast_update()
+
+      socket =
+        socket
+        |> assign(:uploaded_files, Sounds.list_detailed())
+        |> Phoenix.LiveView.put_flash(
+          if(failed == 0, do: :info, else: :error),
+          tag_result(tag.name, length(sounds) - failed, failed)
+        )
+
+      {:noreply, socket}
+    else
+      {:error, message} when is_binary(message) ->
+        {:noreply, Phoenix.LiveView.put_flash(socket, :error, message)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  defp tag_result(tag, done, 0), do: "Tagged #{pluralize(done)} \"#{tag}\""
+
+  defp tag_result(tag, done, failed),
+    do: "Tagged #{pluralize(done)} \"#{tag}\"; #{pluralize(failed)} could not be tagged"
+
   @doc "Drops selections for sounds that no longer exist after the list reloads."
   def prune_selection(socket) do
     present = MapSet.new(socket.assigns.uploaded_files, & &1.id)

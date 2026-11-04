@@ -3,6 +3,7 @@ defmodule SoundboardWeb.Live.Support.StudioControls do
   import Phoenix.LiveView
   import Phoenix.Component
   alias Soundboard.{AudioPlayer, Capture, MasterVolume, PubSubTopics}
+  alias Soundboard.Capture.Moments
 
   def on_mount(:default, _params, session, socket) do
     user =
@@ -18,6 +19,7 @@ defmodule SoundboardWeb.Live.Support.StudioControls do
      |> assign(:current_user, user)
      |> assign(:studio_volume, MasterVolume.get())
      |> assign(:studio_capture, Capture.status())
+     |> assign(:studio_naming, nil)
      |> attach_hook(:studio_events, :handle_event, &handle_event/3)
      |> attach_hook(:studio_messages, :handle_info, &handle_info/2)}
   end
@@ -29,6 +31,8 @@ defmodule SoundboardWeb.Live.Support.StudioControls do
              "start_capture",
              "stop_capture",
              "save_moment",
+             "name_moment",
+             "skip_naming",
              "stop_sound"
            ] do
     if socket.assigns.current_user do
@@ -57,6 +61,28 @@ defmodule SoundboardWeb.Live.Support.StudioControls do
     push_event(socket, "stop-all-sounds", %{})
   end
 
+  defp act("skip_naming", _, socket), do: assign(socket, :studio_naming, nil)
+
+  defp act("name_moment", %{"moment" => attrs}, socket) do
+    case socket.assigns.studio_naming do
+      %{name: name} ->
+        tags = List.wrap(attrs["tags"]) ++ Moments.clean_tags(attrs["new_tags"] || "")
+
+        case Capture.label(name, %{"title" => attrs["title"], "tags" => tags}) do
+          :ok ->
+            socket |> assign(:studio_naming, nil) |> put_flash(:info, "Moment named")
+
+          _ ->
+            put_flash(socket, :error, "Could not name this moment. Rename it in Saved moments.")
+        end
+
+      _ ->
+        socket
+    end
+  end
+
+  defp act("name_moment", _, socket), do: socket
+
   defp act(event, _, socket) do
     result =
       case event do
@@ -66,8 +92,16 @@ defmodule SoundboardWeb.Live.Support.StudioControls do
       end
 
     case result do
-      :ok -> assign(socket, :studio_capture, Capture.status())
-      {:error, reason} -> put_flash(socket, :error, error_message(reason))
+      {:ok, name} ->
+        socket
+        |> assign(:studio_capture, Capture.status())
+        |> assign(:studio_naming, %{name: name, suggestions: Enum.take(Moments.all_tags(), 8)})
+
+      :ok ->
+        assign(socket, :studio_capture, Capture.status())
+
+      {:error, reason} ->
+        put_flash(socket, :error, error_message(reason))
     end
   end
 
@@ -85,7 +119,8 @@ defmodule SoundboardWeb.Live.Support.StudioControls do
     socket =
       case result do
         {:ok, _} -> put_flash(socket, :info, "Moment saved")
-        {:error, reason} -> put_flash(socket, :error, error_message(reason))
+        {:error, reason} ->
+          socket |> assign(:studio_naming, nil) |> put_flash(:error, error_message(reason))
       end
 
     {:halt, socket}

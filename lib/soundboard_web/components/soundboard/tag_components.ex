@@ -84,18 +84,11 @@ defmodule SoundboardWeb.Components.Soundboard.TagComponents do
     <button
       phx-click={@click_event}
       phx-value-tag={tag_value(@tag, @tag_key)}
-      class={[
-        "inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium",
-        if(LiveTags.tag_selected?(@tag, @selected_tags),
-          do: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-          else:
-            "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-        )
-        | List.wrap(@class)
-      ]}
+      aria-pressed={to_string(LiveTags.tag_selected?(@tag, @selected_tags))}
+      class={["chip", LiveTags.tag_selected?(@tag, @selected_tags) && "is-active" | List.wrap(@class)]}
     >
       {tag_value(@tag, @tag_key)}
-      <span class="text-xs">({LiveTags.count_sounds_with_tag(@uploaded_files, @tag)})</span>
+      <span class="chip-count">{LiveTags.count_sounds_with_tag(@uploaded_files, @tag)}</span>
     </button>
     """
   end

@@ -115,32 +115,58 @@ window.addEventListener("phx:stop-all-sounds", stopActiveLocalPlayer)
 
 let Hooks = {}
 Hooks.Sidebar = {
+  // Desktop/iPad: a sidebar that collapses to an icon rail (choice remembered).
+  // Phone: hidden off-canvas, opened from the top bar as a drawer over the content.
   mounted() {
     this.button = this.el.querySelector("[data-sidebar-toggle]")
     this.media = window.matchMedia("(max-width: 639px)")
     try { this.preference = localStorage.getItem("soundboard.sidebar.collapsed") } catch (_err) {}
-    this.collapsed = this.preference == null ? this.media.matches : this.preference === "true"
+    this.collapsed = this.media.matches || this.preference === "true"
     this.apply = () => {
+      const phone = this.media.matches
       document.body.classList.toggle("sidebar-collapsed", this.collapsed)
+      document.body.classList.toggle("drawer-open", phone && !this.collapsed)
       this.el.dataset.collapsed = String(this.collapsed)
-      this.button.setAttribute("aria-expanded", String(!this.collapsed))
-      this.button.setAttribute("aria-label", this.collapsed ? "Expand sidebar" : "Collapse sidebar")
+      document.querySelectorAll("[data-sidebar-toggle][aria-label]").forEach(button => {
+        button.setAttribute("aria-expanded", String(!this.collapsed))
+        button.setAttribute("aria-label", phone
+          ? (this.collapsed ? "Open menu" : "Close menu")
+          : (this.collapsed ? "Expand sidebar" : "Collapse sidebar"))
+      })
     }
-    this.toggle = () => {
+    this.toggle = (event) => {
+      if (!event.target.closest("[data-sidebar-toggle]")) return
       this.collapsed = !this.collapsed
-      this.preference = String(this.collapsed)
-      try { localStorage.setItem("soundboard.sidebar.collapsed", this.preference) } catch (_err) {}
+      if (!this.media.matches) {
+        this.preference = String(this.collapsed)
+        try { localStorage.setItem("soundboard.sidebar.collapsed", this.preference) } catch (_err) {}
+      }
       this.apply()
     }
-    this.resize = () => { if (this.preference == null) { this.collapsed = this.media.matches; this.apply() } }
-    this.button.addEventListener("click", this.toggle)
+    // Following a link on a phone closes the drawer so the new page is visible.
+    this.onNavigate = (event) => {
+      if (this.media.matches && event.target.closest("a")) { this.collapsed = true; this.apply() }
+    }
+    this.onKey = (event) => {
+      if (event.key === "Escape" && this.media.matches && !this.collapsed) { this.collapsed = true; this.apply() }
+    }
+    this.resize = () => {
+      this.collapsed = this.media.matches || this.preference === "true"
+      this.apply()
+    }
+    document.addEventListener("click", this.toggle)
+    this.el.addEventListener("click", this.onNavigate)
+    window.addEventListener("keydown", this.onKey)
     this.media.addEventListener("change", this.resize)
     this.apply()
   },
   updated() { this.apply() },
   destroyed() {
-    this.button.removeEventListener("click", this.toggle)
+    document.removeEventListener("click", this.toggle)
+    this.el.removeEventListener("click", this.onNavigate)
+    window.removeEventListener("keydown", this.onKey)
     this.media.removeEventListener("change", this.resize)
+    document.body.classList.remove("drawer-open")
   }
 }
 
@@ -169,6 +195,19 @@ Hooks.MasterVolume = {
     this.el.removeEventListener("change", this.onChange)
   }
 }
+// Shows a UTC timestamp in the viewer's own time zone, e.g. "Tue 4 Nov, 21:14".
+const localTimeFormat = new Intl.DateTimeFormat(undefined, {
+  weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
+})
+Hooks.LocalTime = {
+  mounted() { this.format() },
+  updated() { this.format() },
+  format() {
+    const date = new Date(this.el.getAttribute("datetime"))
+    if (!Number.isNaN(date.getTime())) this.el.textContent = localTimeFormat.format(date)
+  }
+}
+
 Hooks.MomentEditor = {
   mounted() {
     this.audio = this.el.querySelector("audio")

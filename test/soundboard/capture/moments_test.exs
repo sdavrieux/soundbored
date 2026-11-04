@@ -88,6 +88,37 @@ defmodule Soundboard.Capture.MomentsTest do
     assert {:error, _} = Moments.publish(name, moment.revision, attrs, user)
   end
 
+  test "label names a moment and merges tags; trims keep them and publishing carries them", %{
+    name: name,
+    user: user
+  } do
+    assert {:ok, %{tags: []}} = Moments.get(name)
+    assert {:ok, _} = Moments.label(name, %{"tags" => ["Sam"]})
+
+    assert {:ok, moment} =
+             Moments.label(name, %{"title" => " Clutch ", "tags" => "Funny, sam, ,raid"})
+
+    assert moment.title == "Clutch"
+    assert moment.tags == ["sam", "funny", "raid"]
+    assert {:ok, %{title: "Clutch"} = moment} = Moments.label(name, %{"title" => ""})
+    assert Moments.all_tags() == ["funny", "raid", "sam"]
+
+    attrs = %{"title" => "Clutch", "tags" => "funny, sam", "start" => "0", "stop" => "1"}
+    assert {:ok, trimmed} = Moments.save(name, moment.revision, attrs)
+    assert trimmed.tags == ["funny", "sam"]
+
+    assert {:ok, sound} = Moments.publish(name, trimmed.revision, attrs, user)
+    tags = sound |> Repo.preload(:tags) |> Map.get(:tags) |> Enum.map(& &1.name)
+    assert Enum.sort(tags) == ["funny", "moments", "sam"]
+  end
+
+  test "clean_tags caps count and length" do
+    tags = Moments.clean_tags(Enum.map(1..20, &"tag#{&1}") ++ [String.duplicate("x", 50)])
+    assert length(tags) == 12
+    assert Moments.clean_tags(String.duplicate("y", 50)) == [String.duplicate("y", 30)]
+    assert Moments.clean_tags(nil) == []
+  end
+
   defp restore(key, nil), do: Application.delete_env(:soundboard, key)
   defp restore(key, value), do: Application.put_env(:soundboard, key, value)
 end

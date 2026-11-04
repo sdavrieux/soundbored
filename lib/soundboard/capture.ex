@@ -5,7 +5,9 @@ defmodule Soundboard.Capture do
   Exports run under a supervisor so recording continues while a moment is saved.
   """
   use GenServer
-  alias Soundboard.Capture.{Buffer, Storage}
+  import Ecto.Query, only: [from: 2]
+  alias Soundboard.Accounts.User
+  alias Soundboard.Capture.{Buffer, Moments, Storage}
   alias Soundboard.Discord.{Handler, Voice}
   alias Soundboard.PubSubTopics
 
@@ -18,7 +20,19 @@ defmodule Soundboard.Capture do
   end
 
   def stop_capture, do: GenServer.call(__MODULE__, :stop)
+  @doc "Freezes the last minute and starts exporting it. Returns the new moment's name."
   def save, do: GenServer.call(__MODULE__, :save)
+
+  @doc """
+  Names and tags a moment. If it is still exporting, the label is applied as soon as
+  the file exists, so the operator can type while FFmpeg works.
+  """
+  def label(name, attrs) do
+    case GenServer.call(__MODULE__, {:label, name, attrs}) do
+      :pending -> :ok
+      :saved -> with {:ok, _} <- Moments.label(name, attrs), do: :ok
+    end
+  end
 
   def active?(guild_id) do
     %{target: target} = status()
@@ -37,7 +51,8 @@ defmodule Soundboard.Capture do
   @impl true
   def init(_) do
     Process.send_after(self(), :tick, 1000)
-    {:ok, %{target: nil, started_at: nil, buffer: %Buffer{}, export: nil}}
+    {:ok,
+     %{target: nil, started_at: nil, buffer: %Buffer{}, export: nil, export_name: nil, label: nil}}
   end
 
   @impl true
@@ -74,17 +89,29 @@ defmodule Soundboard.Capture do
   def handle_call(:save, _from, state) do
     case Buffer.snapshot(state.buffer, now(), state.started_at) do
       {:ok, snapshot} ->
-        task =
-          Task.Supervisor.async_nolink(Soundboard.Capture.Tasks, fn -> Storage.save(snapshot) end)
+        name = Storage.new_name()
 
-        state = %{state | export: task.ref}
+        task =
+          Task.Supervisor.async_nolink(Soundboard.Capture.Tasks, fn ->
+            with {:ok, ^name} <- Storage.save(snapshot, name) do
+              Moments.label(name, %{"tags" => speaker_tags(snapshot.frames)})
+              {:ok, name}
+            end
+          end)
+
+        state = %{state | export: task.ref, export_name: name, label: nil}
         broadcast(state)
-        {:reply, :ok, state}
+        {:reply, {:ok, name}, state}
 
       error ->
         {:reply, error, state}
     end
   end
+
+  def handle_call({:label, name, attrs}, _from, %{export_name: name} = state),
+    do: {:reply, :pending, %{state | label: attrs}}
+
+  def handle_call({:label, _name, _attrs}, _from, state), do: {:reply, :saved, state}
 
   def handle_call(
         {:audio, %{guild_id: guild, user_id: speaker, opus: packet}},
@@ -117,14 +144,18 @@ defmodule Soundboard.Capture do
 
   def handle_info({ref, result}, %{export: ref} = state) when is_reference(ref) do
     Process.demonitor(ref, [:flush])
-    state = %{state | export: nil}
+
+    with {{:ok, name}, %{} = label} <- {result, state.label},
+         do: Moments.label(name, label)
+
+    state = %{state | export: nil, export_name: nil, label: nil}
     PubSubTopics.broadcast_desk({:capture_saved, result})
     broadcast(state)
     {:noreply, state}
   end
 
   def handle_info({:DOWN, ref, :process, _, _}, %{export: ref} = state) do
-    state = %{state | export: nil}
+    state = %{state | export: nil, export_name: nil, label: nil}
     PubSubTopics.broadcast_desk({:capture_saved, {:error, :export_failed}})
     broadcast(state)
     {:noreply, state}
@@ -158,6 +189,15 @@ defmodule Soundboard.Capture do
       seconds: if(state.started_at, do: min(60, div(now() - state.started_at, 1000)), else: 0),
       has_audio: Buffer.prune(state.buffer, now()).count > 0
     }
+  end
+
+  # Who was talking is the easiest way to find a clip later. Only operators who
+  # signed in have a known name; other speakers are left untagged.
+  defp speaker_tags(frames) do
+    ids = frames |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
+    Soundboard.Repo.all(from u in User, where: u.discord_id in ^ids, select: u.username)
+  rescue
+    _ -> []
   end
 
   defp broadcast(state), do: PubSubTopics.broadcast_desk({:capture_status, public_status(state)})

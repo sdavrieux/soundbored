@@ -51,6 +51,33 @@ defmodule SoundboardWeb.RadioDeskTest do
     assert render(view) =~ "Recording folder is full"
   end
 
+  test "saving opens a name sheet and sends the name and tags to the new moment", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/moments")
+    name = "moment-20260101T120000Z-0123456789abcdef.wav"
+
+    with_mock Soundboard.Capture, [:passthrough],
+      save: fn -> {:ok, name} end,
+      label: fn _, _ -> :ok end do
+      render_click(view, "save_moment", %{})
+      assert has_element?(view, "#name-moment-sheet [role=dialog]")
+
+      view
+      |> form("#name-moment", moment: %{title: "Clutch", new_tags: "Funny, raid"})
+      |> render_submit()
+
+      assert_called(
+        Soundboard.Capture.label(name, %{"title" => "Clutch", "tags" => ["funny", "raid"]})
+      )
+
+      refute has_element?(view, "#name-moment-sheet")
+      assert render(view) =~ "Moment named"
+
+      render_click(view, "save_moment", %{})
+      render_click(view, "skip_naming", %{})
+      refute has_element?(view, "#name-moment-sheet")
+    end
+  end
+
   test "unsigned events cannot change master level or start capture" do
     socket = %Phoenix.LiveView.Socket{assigns: %{current_user: nil, __changed__: %{}, flash: %{}}}
 

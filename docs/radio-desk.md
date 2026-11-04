@@ -1,11 +1,11 @@
 # Radio desk
 
 The sidebar opens Sounds, Saved moments, Favorites, Stats, and Settings. A fixed
-bottom bar keeps master volume, Stop, and Save last 60 seconds within reach.
-Start capture sits beside Add Sound and Play Random on the Sounds page.
-Use the sidebar toggle to switch between full navigation and an icon rail. Your
-choice is remembered in this browser; content and bottom controls expand with it.
-On phones, expanding the rail opens navigation over the content.
+bottom bar keeps master volume, Start/Stop capture (with a live recording dot),
+Save last 60s, and Stop within reach on every page.
+On iPad and desktop the sidebar toggle switches between full navigation and an
+icon rail; the choice is remembered in this browser. On phones a top bar opens
+navigation as a drawer over the content.
 
 ## Master volume
 
@@ -32,14 +32,18 @@ FFmpeg with libopus and Unix `sh`/`mkfifo`, included in the Alpine image.
 ## Capture a moment
 
 1. Join a Discord voice channel. Have the bot join with `!join` or play a sound.
-2. Let participants know you are enabling capture, then tap **Start capture**.
-3. After something memorable happens, tap **Save last 60 seconds**.
-4. Open **Saved moments** from the sidebar and select a recording.
+2. Let participants know you are enabling capture, then tap **Start capture** in
+   the bottom bar. Stopping asks first, because unsaved audio is discarded.
+3. After something memorable happens, tap **Save last 60 seconds**. The audio is
+   frozen at once; a sheet then asks for a name and tags while it exports.
+   Signed-in speakers are tagged automatically. **Skip** keeps a dated name.
+4. Open **Saved moments** from the sidebar and select a recording. Search by name
+   or tap several tags to show only moments that have all of them.
 5. Play it, choose start/end using the sliders or exact second fields, and use
    **Preview selection** to hear the trim.
 6. **Save changes** replaces the private recording with the chosen range and
    name. **Publish to Sounds** creates a dashboard sound from the current range,
-   leaving the private recording unchanged. Published clips receive a moments tag.
+   leaving the private recording unchanged. Published clips receive a moments tag plus the moment's own tags.
 7. **Download WAV** exports a private copy. **Delete moment** asks for confirmation
    and removes the private recording; published dashboard sounds remain separate.
 

@@ -8,7 +8,7 @@ defmodule SoundboardWeb.Components.Soundboard.UploadModalTest do
   test "renders url workflow and prompts for missing URL" do
     html = render_component(&UploadModal.upload_modal/1, upload_assigns())
 
-    assert html =~ "Add Sound"
+    assert html =~ "Add sound"
     assert html =~ "Source Type"
     assert html =~ "Enter a URL first to name it."
   end

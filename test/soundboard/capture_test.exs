@@ -70,12 +70,13 @@ defmodule Soundboard.CaptureTest do
          start_listening: fn _ -> :ok end,
          stop_listening: fn _ -> :ok end
        ]},
-      {Capture.Storage, [], [save: fn _ -> exit(:export_failed) end]}
+      {Capture.Storage, [],
+       [new_name: fn -> "failed.wav" end, save: fn _, _ -> exit(:export_failed) end]}
     ]) do
       ExUnit.CaptureLog.capture_log(fn ->
         assert :ok = Capture.start_capture()
         Capture.ingest(%{guild_id: "g", user_id: "a", opus: <<0xF8, 0xFF, 0xFE>>})
-        assert :ok = Capture.save()
+        assert {:ok, "failed.wav"} = Capture.save()
         assert_receive {:capture_saved, {:error, :export_failed}}
         refute Capture.status().saving
         Capture.stop_capture()
@@ -98,7 +99,9 @@ defmodule Soundboard.CaptureTest do
        ]},
       {Capture.Storage, [],
        [
-         save: fn snapshot ->
+         new_name: fn -> "saved.wav" end,
+         download_path: fn _ -> {:error, :not_found} end,
+         save: fn snapshot, "saved.wav" ->
            send(test_pid, {:export_snapshot, snapshot, self()})
 
            receive do
@@ -109,7 +112,7 @@ defmodule Soundboard.CaptureTest do
     ]) do
       assert :ok = Capture.start_capture()
       Capture.ingest(%{guild_id: "g", user_id: "a", opus: <<0xF8, 0xFF, 0xFE>>})
-      assert :ok = Capture.save()
+      assert {:ok, "saved.wav"} = Capture.save()
       assert_receive {:export_snapshot, snapshot, worker}
       assert length(snapshot.frames) == 1
       Capture.ingest(%{guild_id: "g", user_id: "b", opus: <<0xF8, 0xFF, 0xFE>>})

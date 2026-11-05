@@ -141,6 +141,15 @@ curl -X POST https://soundboardurl.com/api/sounds \
 ```
 Returns `201 Created` with `%{data: sound}`.
 
+#### Replace a sound's tags
+```bash
+curl -X PUT https://soundboardurl.com/api/sounds/123/tags \
+  -H "Authorization: Bearer <USER_API_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"tags":["audience","laugh"]}'
+```
+Returns `200 OK` with `%{data: sound}`. An empty list clears the tags.
+
 #### Queue playback for a sound
 ```bash
 curl -X POST https://soundboardurl.com/api/sounds/123/play \

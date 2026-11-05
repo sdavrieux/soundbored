@@ -13,7 +13,7 @@ defmodule SoundboardWeb.SoundboardLive do
   alias SoundboardWeb.Soundboard.SoundFilter
   import SoundboardWeb.Live.Support.LiveTags, only: [all_tags: 1, tag_selected?: 2]
 
-  import SoundFilter, only: [filter_sounds: 3]
+  import SoundFilter, only: [filter_sounds: 4]
 
   @impl true
   def mount(_params, session, socket) do
@@ -49,6 +49,7 @@ defmodule SoundboardWeb.SoundboardLive do
     |> assign(:search_query, "")
     |> assign(:editing, nil)
     |> assign(:selected_tags, [])
+    |> assign(:tag_match, :all)
     |> assign(:only_favorites, false)
     |> UploadFlow.assign_defaults()
     |> EditFlow.assign_defaults()
@@ -119,6 +120,12 @@ defmodule SoundboardWeb.SoundboardLive do
 
         {:noreply, assign(socket, :selected_tags, selected)}
     end
+  end
+
+  @impl true
+  def handle_event("toggle_tag_match", _params, socket) do
+    match = if socket.assigns.tag_match == :all, do: :any, else: :all
+    {:noreply, assign(socket, :tag_match, match)}
   end
 
   @impl true
@@ -400,7 +407,13 @@ defmodule SoundboardWeb.SoundboardLive do
   defp visible_sounds(socket), do: shown_sounds(socket.assigns)
 
   defp shown_sounds(assigns) do
-    sounds = filter_sounds(assigns.uploaded_files, assigns.search_query, assigns.selected_tags)
+    sounds =
+      filter_sounds(
+        assigns.uploaded_files,
+        assigns.search_query,
+        assigns.selected_tags,
+        assigns.tag_match
+      )
 
     if assigns.only_favorites,
       do: Enum.filter(sounds, &(&1.id in assigns.favorites)),

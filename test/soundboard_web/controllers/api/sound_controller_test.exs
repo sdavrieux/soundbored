@@ -267,6 +267,36 @@ defmodule SoundboardWeb.API.SoundControllerTest do
     end
   end
 
+  describe "update_tags" do
+    test "replaces the sound's tags", %{conn: conn, sound: sound} do
+      conn = put(conn, ~p"/api/sounds/#{sound.id}/tags", %{tags: ["Audience", "fail", "fail"]})
+
+      assert %{"data" => %{"tags" => tags}} = json_response(conn, 200)
+      assert Enum.sort(tags) == ["audience", "fail"]
+
+      assert sound
+             |> Repo.preload(:tags, force: true)
+             |> Map.get(:tags)
+             |> Enum.map(& &1.name)
+             |> Enum.sort() == ["audience", "fail"]
+    end
+
+    test "an empty list clears the tags", %{conn: conn, sound: sound} do
+      conn = put(conn, ~p"/api/sounds/#{sound.id}/tags", %{tags: []})
+      assert %{"data" => %{"tags" => []}} = json_response(conn, 200)
+    end
+
+    test "returns 404 for an unknown sound", %{conn: conn} do
+      conn = put(conn, ~p"/api/sounds/0/tags", %{tags: ["fail"]})
+      assert json_response(conn, 404)["error"] == "Sound not found"
+    end
+
+    test "returns unauthorized without valid API token", %{sound: sound} do
+      conn = put(build_conn(), ~p"/api/sounds/#{sound.id}/tags", %{tags: ["fail"]})
+      assert conn.status == 401
+    end
+  end
+
   describe "play" do
     test "plays a sound as the authenticated token user", %{conn: conn, sound: sound, user: user} do
       with_mock Soundboard.AudioPlayer, play_sound: fn _filename, _actor -> :ok end do

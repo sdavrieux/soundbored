@@ -2,6 +2,7 @@ defmodule SoundboardWeb.API.SoundController do
   use SoundboardWeb, :controller
 
   alias Soundboard.{Repo, Sound, Sounds}
+  alias Soundboard.Sounds.Tags
 
   def index(conn, _params) do
     sounds =
@@ -24,6 +25,31 @@ defmodule SoundboardWeb.API.SoundController do
         conn
         |> put_status(:forbidden)
         |> json(%{error: "Uploads require a user API token"})
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: changeset_errors(changeset)})
+    end
+  end
+
+  @doc "Replaces a sound's tags with the given list of tag names."
+  def update_tags(conn, %{"id" => id} = params) do
+    with {:ok, user} <- require_upload_user(conn),
+         %Sound{} = sound <- Repo.get(Sound, id),
+         {:ok, tags} <- Tags.resolve_many(List.wrap(params["tags"])),
+         {:ok, sound} <- Tags.update_sound_tags(sound, tags) do
+      json(conn, %{data: format_sound(sound, user)})
+    else
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "Sound not found"})
+
+      {:error, :forbidden_auth_state} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "Tagging requires a user API token"})
 
       {:error, %Ecto.Changeset{} = changeset} ->
         conn

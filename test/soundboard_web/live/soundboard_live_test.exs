@@ -137,9 +137,17 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       assert html =~ "both"
       refute html =~ "only-funny"
       assert has_element?(view, "button[phx-value-tag='sam'][aria-pressed='true']")
+      assert has_element?(view, "#tag-match-toggle", "Match all")
 
+      html = view |> element("#tag-match-toggle") |> render_click()
+      assert html =~ "Match any"
+      assert html =~ "both"
+      assert html =~ "only-funny"
+
+      view |> element("#tag-match-toggle") |> render_click()
       html = render_click(chip.("sam"))
       assert html =~ "only-funny"
+      refute has_element?(view, "#tag-match-toggle")
 
       view |> element("#clear-tag-filters") |> render_click()
       refute has_element?(view, "button[aria-pressed='true']")

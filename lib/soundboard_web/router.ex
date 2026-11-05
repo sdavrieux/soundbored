@@ -93,6 +93,7 @@ defmodule SoundboardWeb.Router do
 
     get "/sounds", SoundController, :index
     post "/sounds", SoundController, :create
+    put "/sounds/:id/tags", SoundController, :update_tags
     post "/sounds/:id/play", SoundController, :play
     post "/sounds/stop", SoundController, :stop
   end

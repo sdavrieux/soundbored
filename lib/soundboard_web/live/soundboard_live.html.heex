@@ -76,6 +76,20 @@
       >
         <.icon name="hero-heart-solid" class="w-4 h-4" /> Favorites
       </button>
+      <button
+        :if={length(@selected_tags) > 1}
+        id="tag-match-toggle"
+        phx-click="toggle_tag_match"
+        class="chip chip-clear"
+        title={
+          if @tag_match == :all,
+            do: "Showing sounds with every selected tag. Tap to show sounds with any of them.",
+            else: "Showing sounds with any selected tag. Tap to require all of them."
+        }
+      >
+        <.icon name="hero-arrows-right-left" class="w-4 h-4" />
+        {if @tag_match == :all, do: "Match all", else: "Match any"}
+      </button>
       <.tag_filter_button
         :for={tag <- ordered_tags}
         tag={tag}
@@ -101,7 +115,11 @@
           Only sounds you uploaded can be selected.
         </span>
       </div>
-      <form id="tag-selected" phx-submit="tag_selected" class="flex gap-2 w-full sm:w-auto sm:flex-1">
+      <form
+        id="tag-selected"
+        phx-submit="tag_selected"
+        class="flex gap-2 w-full sm:w-auto sm:flex-1"
+      >
         <label for="tag-selected-input" class="sr-only">Tag to add to selected sounds</label>
         <input
           id="tag-selected-input"

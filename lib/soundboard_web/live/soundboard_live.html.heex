@@ -188,8 +188,6 @@
             selecting={@selecting}
             selectable={@selecting && BulkDeleteFlow.deletable?(sound, assigns)}
             selected={MapSet.member?(@selected_ids, sound.id)}
-            selected_tags={@selected_tags}
-            tag_event="toggle_tag_filter"
           />
         <% end %>
       </div>

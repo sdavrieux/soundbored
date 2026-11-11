@@ -5,8 +5,6 @@ defmodule SoundboardWeb.Components.Soundboard.SoundCard do
   """
   use SoundboardWeb, :html
 
-  @visible_tags 2
-
   attr :sound, :map, required: true
   attr :favorite, :boolean, default: false
   attr :show_favorite, :boolean, default: true
@@ -14,15 +12,11 @@ defmodule SoundboardWeb.Components.Soundboard.SoundCard do
   attr :selecting, :boolean, default: false
   attr :selectable, :boolean, default: false
   attr :selected, :boolean, default: false
-  attr :selected_tags, :list, default: []
-  attr :tag_event, :string, default: nil
 
   def sound_card(assigns) do
     assigns =
       assigns
       |> assign(:name, display_name(assigns.sound.filename))
-      |> assign(:shown_tags, Enum.take(assigns.sound.tags, @visible_tags))
-      |> assign(:hidden_tags, max(length(assigns.sound.tags) - @visible_tags, 0))
       |> assign(:uploader, uploader(assigns.sound))
 
     ~H"""
@@ -71,32 +65,6 @@ defmodule SoundboardWeb.Components.Soundboard.SoundCard do
               by {@uploader}
             </p>
           </div>
-        </div>
-
-        <div :if={@sound.tags != []} class="flex flex-wrap gap-1 pointer-events-auto">
-          <%= for tag <- @shown_tags do %>
-            <button
-              :if={@tag_event}
-              type="button"
-              phx-click={@tag_event}
-              phx-value-tag={tag.name}
-              aria-label={"Filter by #{tag.name}"}
-              class={[
-                "sound-pad-tag",
-                Enum.any?(@selected_tags, &(&1.id == tag.id)) && "is-active"
-              ]}
-            >
-              {tag.name}
-            </button>
-            <span :if={!@tag_event} class="sound-pad-tag">{tag.name}</span>
-          <% end %>
-          <span
-            :if={@hidden_tags > 0}
-            class="sound-pad-tag"
-            title={@sound.tags |> Enum.drop(2) |> Enum.map_join(", ", & &1.name)}
-          >
-            +{@hidden_tags}
-          </span>
         </div>
 
         <div class="mt-auto flex justify-end gap-1 pointer-events-auto">

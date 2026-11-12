@@ -93,7 +93,15 @@ body.sidebar-collapsed { --studio-sidebar-width:64px; }
 .studio-controls { position:fixed; inset:auto 0 0 var(--studio-sidebar-width); z-index:35; display:flex; align-items:center; gap:16px; padding:12px 24px calc(12px + env(safe-area-inset-bottom)); background:#111827; color:#f3f4f6; border-top:1px solid #374151; box-shadow:0 -8px 24px #0002; }
 .master-control { flex:1; max-width:360px; min-width:140px; }
 .master-control label { display:flex; justify-content:space-between; font-size:13px; color:#d1d5db; }
-.master-control input { width:100%; height:36px; accent-color:#60a5fa; }
+.master-control input { --fill:100%; width:100%; height:44px; margin:0; background:transparent; appearance:none; -webkit-appearance:none; touch-action:none; cursor:pointer; }
+.master-control input::-webkit-slider-runnable-track { height:14px; border-radius:999px; background:linear-gradient(to right, #60a5fa var(--fill), #374151 var(--fill)); }
+.master-control input::-moz-range-track { height:14px; border-radius:999px; background:#374151; }
+.master-control input::-moz-range-progress { height:14px; border-radius:999px; background:#60a5fa; }
+.master-control input::-webkit-slider-thumb { -webkit-appearance:none; width:30px; height:30px; margin-top:-8px; border-radius:50%; background:#fff; border:3px solid #60a5fa; box-shadow:0 1px 4px #0006; }
+.master-control input::-moz-range-thumb { width:24px; height:24px; border-radius:50%; background:#fff; border:3px solid #60a5fa; box-shadow:0 1px 4px #0006; }
+.master-control input:focus-visible { outline:none; }
+.master-control input:focus-visible::-webkit-slider-thumb { outline:3px solid #bfdbfe; outline-offset:2px; }
+.master-control input:focus-visible::-moz-range-thumb { outline:3px solid #bfdbfe; outline-offset:2px; }
 .desk-buttons { display:flex; gap:8px; margin-left:auto; }
 .capture-button { border:1px solid #4b5563; color:#f3f4f6; font-variant-numeric:tabular-nums; }
 .capture-button.is-live { border-color:#f87171; color:#fecaca; background:#7f1d1d55; }
@@ -196,7 +204,6 @@ body.sidebar-collapsed { --studio-sidebar-width:64px; }
   .studio-main { margin-left:0; }
   .studio-controls { left:0; flex-wrap:wrap; gap:8px; padding:8px 12px calc(10px + env(safe-area-inset-bottom)); }
   .master-control { flex-basis:100%; max-width:none; }
-  .master-control input { height:32px; }
   .desk-buttons { width:100%; margin-left:0; }
   .desk-buttons .studio-button { padding:10px 10px; font-size:14px; }
   .save-button { flex:1; }

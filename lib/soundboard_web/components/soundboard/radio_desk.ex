@@ -23,6 +23,7 @@ defmodule SoundboardWeb.Components.Soundboard.RadioDesk do
           max="100"
           step="1"
           value={@volume}
+          style={"--fill: #{@volume}%"}
           phx-hook="MasterVolume"
           aria-label="Master volume"
         />

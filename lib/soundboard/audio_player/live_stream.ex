@@ -4,6 +4,8 @@ defmodule Soundboard.AudioPlayer.LiveStream do
   alias EDA.Voice.Ogg
   alias Soundboard.{MasterVolume, PubSubTopics}
   @chunk 3840
+  # Frames encoded ahead of Discord; each is 20 ms, so this bounds master-volume lag.
+  @ahead 8
 
   def frames(input, clip_gain) do
     Stream.resource(
@@ -134,7 +136,7 @@ defmodule Soundboard.AudioPlayer.LiveStream do
   defp next(%{finished: true} = state), do: {:done, state}
 
   defp next(%{pcm: pcm, pending: pending} = state)
-       when byte_size(pcm) >= @chunk and pending < 16 do
+       when byte_size(pcm) >= @chunk and pending < @ahead do
     <<chunk::binary-size(@chunk), rest::binary>> = pcm
     :ok = IO.binwrite(state.writer, scale(chunk, state.gain * MasterVolume.current() / 100))
     state = %{state | pcm: rest, pending: pending + 1}

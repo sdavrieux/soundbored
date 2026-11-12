@@ -173,21 +173,32 @@ Hooks.Sidebar = {
 Hooks.MasterVolume = {
   mounted() {
     this.editing = false
-    updateMaster(this.el.value)
+    this.timer = null
+    this.apply = () => {
+      updateMaster(this.el.value)
+      this.el.style.setProperty("--fill", `${this.el.value}%`)
+    }
+    this.apply()
     this.send = () => this.pushEvent("set_master_volume", {volume: this.el.value})
+    // Throttle rather than debounce so Discord follows the slider while it is dragged.
     this.onInput = () => {
       this.editing = true
-      updateMaster(this.el.value)
+      this.apply()
       document.getElementById("master-volume-value").textContent = `${this.el.value}%`
-      clearTimeout(this.timer)
-      this.timer = setTimeout(this.send, 80)
+      if (!this.timer) this.timer = setTimeout(() => { this.timer = null; this.send() }, 80)
     }
-    this.onChange = () => { clearTimeout(this.timer); this.editing = false; this.send() }
+    this.onChange = () => {
+      clearTimeout(this.timer)
+      this.timer = null
+      this.editing = false
+      this.send()
+    }
     this.el.addEventListener("input", this.onInput)
     this.el.addEventListener("change", this.onChange)
   },
   updated() {
-    if (!this.editing) { this.el.value = this.el.getAttribute("value"); updateMaster(this.el.value) }
+    if (this.editing) this.el.style.setProperty("--fill", `${this.el.value}%`)
+    else { this.el.value = this.el.getAttribute("value"); this.apply() }
   },
   destroyed() {
     clearTimeout(this.timer)

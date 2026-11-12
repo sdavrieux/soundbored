@@ -87,8 +87,10 @@ defmodule Soundboard.MixProject do
       {:jason, "~> 1.2"},
       {:bandit, "~> 1.8"},
       {:eda, "~> 0.1.3"},
+      # eda pins httpoison ~> 2.0, whose hackney 1.x has unfixed security advisories.
+      {:httpoison, "~> 3.0", override: true},
       {:rustler, "~> 0.35", runtime: false},
-      {:ecto_sqlite3, "~> 0.22"},
+      {:ecto_sqlite3, "~> 0.26"},
       {:ueberauth, "~> 0.10.5"},
       {:ueberauth_discord, "~> 0.6"},
       {:mock, "~> 0.3.9", only: :test},

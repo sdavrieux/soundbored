@@ -7,7 +7,7 @@ defmodule SoundboardWeb.SoundboardLive do
   import UploadModal
   import SoundboardWeb.Components.Soundboard.TagComponents, only: [tag_filter_button: 1]
   import SoundboardWeb.Components.Soundboard.SoundCard, only: [sound_card: 1]
-  alias Soundboard.{Favorites, PubSubTopics, Sounds}
+  alias Soundboard.{AudioPlayer.Effects, Favorites, PubSubTopics, Sounds}
   alias SoundboardWeb.Live.SoundboardLive.{BulkDeleteFlow, EditFlow, UploadFlow}
   alias SoundboardWeb.Live.Support.{FlashHelpers, SoundPlayback}
   alias SoundboardWeb.Soundboard.SoundFilter
@@ -51,6 +51,7 @@ defmodule SoundboardWeb.SoundboardLive do
     |> assign(:selected_tags, [])
     |> assign(:tag_match, :all)
     |> assign(:only_favorites, false)
+    |> assign(:effect, nil)
     |> UploadFlow.assign_defaults()
     |> EditFlow.assign_defaults()
     |> BulkDeleteFlow.assign_defaults()
@@ -97,6 +98,16 @@ defmodule SoundboardWeb.SoundboardLive do
   @impl true
   def handle_event("play", %{"name" => filename}, socket) do
     SoundPlayback.play(socket, filename)
+  end
+
+  # FX stay on until tapped again, so a run of sounds can share one effect.
+  @impl true
+  def handle_event("toggle_effect", %{"effect" => effect}, socket) do
+    cond do
+      socket.assigns.effect == effect -> {:noreply, assign(socket, :effect, nil)}
+      Effects.valid?(effect) -> {:noreply, assign(socket, :effect, effect)}
+      true -> {:noreply, socket}
+    end
   end
 
   @impl true

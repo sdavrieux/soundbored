@@ -83,6 +83,20 @@ defmodule Soundboard.AudioPlayer.PlaybackQueueTest do
     end
   end
 
+  test "an effect is handed to the playback engine" do
+    test_pid = self()
+
+    with_mock Soundboard.AudioPlayer.PlaybackEngine,
+      play: fn "guild-1", "channel-9", "intro.mp3", "/tmp/intro.mp3", 0.8, "System", "demon" ->
+        send(test_pid, :played_with_effect)
+        :ok
+      end do
+      state = PlaybackQueue.enqueue(base_state(), Map.put(request(), :effect, "demon"), 35)
+      assert_receive :played_with_effect
+      PlaybackQueue.clear_all(state)
+    end
+  end
+
   test "enqueue interrupts current playback and schedules watchdog when audio is still playing" do
     test_pid = self()
 

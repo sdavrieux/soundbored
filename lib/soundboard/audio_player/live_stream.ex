@@ -2,15 +2,15 @@ defmodule Soundboard.AudioPlayer.LiveStream do
   @moduledoc "Encodes live master attenuation before handing Opus frames to EDA."
   use GenServer
   alias EDA.Voice.Ogg
-  alias Soundboard.{MasterVolume, PubSubTopics}
+  alias Soundboard.{AudioPlayer.Effects, MasterVolume, PubSubTopics}
   @chunk 3840
   # Frames encoded ahead of Discord; each is 20 ms, so this bounds master-volume lag.
   @ahead 8
 
-  def frames(input, clip_gain) do
+  def frames(input, clip_gain, effect \\ nil) do
     Stream.resource(
       fn ->
-        {:ok, pid} = GenServer.start(__MODULE__, {self(), input, clip_gain})
+        {:ok, pid} = GenServer.start(__MODULE__, {self(), input, clip_gain, effect})
         pid
       end,
       fn pid ->
@@ -32,7 +32,9 @@ defmodule Soundboard.AudioPlayer.LiveStream do
   end
 
   @impl true
-  def init({owner, input, gain}) do
+  def init({owner, input, gain}), do: init({owner, input, gain, nil})
+
+  def init({owner, input, gain, effect}) do
     Process.flag(:trap_exit, true)
     ref = Process.monitor(owner)
     ffmpeg = System.find_executable("ffmpeg") || raise "FFmpeg is required"
@@ -87,22 +89,12 @@ defmodule Soundboard.AudioPlayer.LiveStream do
     {:ok, writer} = File.open(fifo, [:write, :binary])
 
     decoder =
-      port(ffmpeg, [
-        "-nostdin",
-        "-v",
-        "quiet",
-        "-re",
-        "-i",
-        input,
-        "-vn",
-        "-f",
-        "s16le",
-        "-ar",
-        "48000",
-        "-ac",
-        "2",
-        "pipe:1"
-      ])
+      port(
+        ffmpeg,
+        ["-nostdin", "-v", "quiet"] ++
+          pacing(Effects.filter(effect), input) ++
+          ["-f", "s16le", "-ar", "48000", "-ac", "2", "pipe:1"]
+      )
 
     {:ok,
      %{
@@ -188,6 +180,10 @@ defmodule Soundboard.AudioPlayer.LiveStream do
   defp absorb({_, {:exit_status, _}}, _), do: raise("Audio conversion failed")
   defp absorb({:DOWN, ref, :process, _, _}, %{ref: ref}), do: exit(:normal)
   defp absorb(_, state), do: state
+
+  # Effects pace themselves with arealtime; plain playback reads the input in real time.
+  defp pacing(nil, input), do: ["-re", "-i", input, "-vn"]
+  defp pacing(filter, input), do: ["-i", input, "-vn", "-af", filter]
 
   def scale(pcm, gain) do
     for <<sample::little-signed-16 <- pcm>>, into: <<>> do

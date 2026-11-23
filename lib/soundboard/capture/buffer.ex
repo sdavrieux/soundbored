@@ -49,6 +49,9 @@ defmodule Soundboard.Capture.Buffer do
 
   def push(buffer, now, _, _), do: prune(buffer, now)
 
+  @doc "Speakers in the order stems are numbered: whoever spoke first is 1."
+  def speakers(frames), do: frames |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
+
   def snapshot(buffer, now, started_at) do
     frames = buffer |> prune(now) |> Map.fetch!(:frames) |> :queue.to_list()
     speakers = frames |> Enum.map(&elem(&1, 1)) |> Enum.uniq()

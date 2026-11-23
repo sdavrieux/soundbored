@@ -1,9 +1,11 @@
 defmodule SoundboardWeb.RecordingController do
   use SoundboardWeb, :controller
-  alias Soundboard.Capture.Storage
+  alias Soundboard.Capture.{Moments, Storage}
 
-  def preview(conn, %{"name" => name}) do
-    with {:ok, path} <- Storage.download_path(name), {:ok, %{size: size}} <- File.stat(path) do
+  # `speakers=1,3` previews a mix of only those speakers before the edit is saved.
+  def preview(conn, %{"name" => name} = params) do
+    with {:ok, path} <- preview_path(name, params["speakers"]),
+         {:ok, %{size: size}} <- File.stat(path) do
       conn =
         conn
         |> put_resp_header("cache-control", "private, no-store")
@@ -19,6 +21,11 @@ defmodule SoundboardWeb.RecordingController do
       _ -> send_resp(conn, 404, "Recording not found")
     end
   end
+
+  defp preview_path(name, speakers) when is_binary(speakers),
+    do: Moments.preview(name, String.split(speakers, ",", trim: true))
+
+  defp preview_path(name, _), do: Storage.download_path(name)
 
   defp send_range(conn, path, size, range) do
     case Regex.run(~r/\Abytes=(\d*)-(\d*)\z/, range) do

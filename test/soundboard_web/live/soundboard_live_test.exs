@@ -89,6 +89,27 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       end
     end
 
+    test "an FX chip plays sounds with that effect until it is tapped again", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+      assert has_element?(view, "#fx-chips #fx-robot[aria-pressed='false']")
+
+      view |> element("#fx-robot") |> render_click()
+      assert has_element?(view, "#fx-robot[aria-pressed='true']")
+
+      with_mock Soundboard.AudioPlayer, play_sound: fn _, _, _ -> :ok end do
+        view |> element("[phx-click='play_random']") |> render_click()
+        assert_called(Soundboard.AudioPlayer.play_sound(:_, :_, "robot"))
+      end
+
+      view |> element("#fx-robot") |> render_click()
+      assert has_element?(view, "#fx-robot[aria-pressed='false']")
+
+      with_mock Soundboard.AudioPlayer, play_sound: fn _, _ -> :ok end do
+        view |> element("[phx-click='play_random']") |> render_click()
+        assert_called(Soundboard.AudioPlayer.play_sound(:_, :_))
+      end
+    end
+
     test "play random respects selected tags", %{conn: conn, user: user} do
       tag =
         %Tag{}

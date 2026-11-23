@@ -50,6 +50,47 @@ defmodule SoundboardWeb.MomentsLiveTest do
     assert render(view) =~ "No moments yet"
   end
 
+  test "speaker picker remixes the preview and saves who is left out", %{conn: conn, dir: dir} do
+    name = MomentFixtures.create_with_stems(dir)
+    {:ok, view, _} = live(conn, "/moments")
+    view |> element("[phx-value-name='#{name}']") |> render_click()
+    render_async(view, 5_000)
+
+    assert has_element?(view, "#moment-speakers", "Ana")
+    assert has_element?(view, "#moment-speakers", "Ben")
+    refute has_element?(view, "audio[src*='speakers=']")
+
+    view |> form("#moment-trim") |> render_change(%{moment: %{speakers: ["", "2"]}})
+    assert has_element?(view, "audio[src*='speakers=2']")
+
+    view |> form("#moment-trim") |> render_change(%{moment: %{speakers: [""]}})
+    assert render(view) =~ "Keep at least one speaker."
+
+    view |> form("#moment-trim") |> render_change(%{moment: %{speakers: ["", "1"]}})
+    view |> form("#moment-trim") |> render_submit()
+    # Leaving someone out remixes the stems with FFmpeg, which takes a moment.
+    assert render_async(view, 5_000) =~ "Changes saved"
+    assert {:ok, %{muted: ["2"]}} = Moments.get(name)
+  end
+
+  test "auto-trim selects the speech of the chosen speakers", %{conn: conn, dir: dir} do
+    name = MomentFixtures.create_with_stems(dir)
+    {:ok, view, _} = live(conn, "/moments")
+    view |> element("[phx-value-name='#{name}']") |> render_click()
+    render_async(view, 5_000)
+
+    view |> form("#moment-trim") |> render_change(%{moment: %{speakers: ["", "2"]}})
+    view |> element("[phx-click=auto_trim]") |> render_click()
+    assert has_element?(view, "#trim-start[value='0.75']")
+    assert has_element?(view, "#trim-stop[value='2.0']")
+    assert_push_event(view, "moment-preview", %{})
+
+    # Two people taking turns at the same level has nothing that stands out.
+    assert render(view) =~ "No standout moments found."
+    render_click(view, "jump_highlight", %{"index" => "nope"})
+    assert has_element?(view, "#trim-start[value='0.75']")
+  end
+
   test "an outdated editor cannot overwrite another session's trim", %{conn: conn, dir: dir} do
     name = MomentFixtures.create(dir)
     {:ok, view, _} = live(conn, "/moments")

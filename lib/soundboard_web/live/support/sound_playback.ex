@@ -8,7 +8,11 @@ defmodule SoundboardWeb.Live.Support.SoundPlayback do
   def play(socket, sound_name) do
     case socket.assigns[:current_user] do
       %User{} = user ->
-        Soundboard.AudioPlayer.play_sound(sound_name, user)
+        case socket.assigns[:effect] do
+          nil -> Soundboard.AudioPlayer.play_sound(sound_name, user)
+          effect -> Soundboard.AudioPlayer.play_sound(sound_name, user, effect)
+        end
+
         {:noreply, socket}
 
       _ ->

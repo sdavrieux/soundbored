@@ -37,11 +37,11 @@ defmodule SoundboardWeb.MomentsLiveTest do
     name = MomentFixtures.create(dir)
     {:ok, view, _} = live(conn, "/moments")
     view |> element("[phx-value-name='#{name}']") |> render_click()
-    assert has_element?(view, "audio[controls]")
+    assert has_element?(view, "[data-wave]")
 
-    view
-    |> form("#moment-trim", moment: %{title: "Best line", start: "0.5", stop: "1.5"})
-    |> render_submit()
+    # The cutter hook writes the cut into the hidden fields and sends a change event.
+    cut(view, "0.5", "1.5")
+    view |> form("#moment-trim", moment: %{title: "Best line"}) |> render_submit()
 
     assert render_async(view) =~ "Changes saved"
     assert {:ok, %{duration: 1.0, title: "Best line"}} = Moments.get(name)
@@ -58,10 +58,10 @@ defmodule SoundboardWeb.MomentsLiveTest do
 
     assert has_element?(view, "#moment-speakers", "Ana")
     assert has_element?(view, "#moment-speakers", "Ben")
-    refute has_element?(view, "audio[src*='speakers=']")
+    refute has_element?(view, "[data-src*='speakers=']")
 
     view |> form("#moment-trim") |> render_change(%{moment: %{speakers: ["", "2"]}})
-    assert has_element?(view, "audio[src*='speakers=2']")
+    assert has_element?(view, "[data-src*='speakers=2']")
 
     view |> form("#moment-trim") |> render_change(%{moment: %{speakers: [""]}})
     assert render(view) =~ "Keep at least one speaker."
@@ -86,7 +86,7 @@ defmodule SoundboardWeb.MomentsLiveTest do
     assert_push_event(view, "moment-preview", %{})
 
     # Two people taking turns at the same level has nothing that stands out.
-    assert render(view) =~ "No standout moments found."
+    refute has_element?(view, ".chip-highlight")
     render_click(view, "jump_highlight", %{"index" => "nope"})
     assert has_element?(view, "#trim-start[value='0.75']")
   end
@@ -104,9 +104,8 @@ defmodule SoundboardWeb.MomentsLiveTest do
                "stop" => "1"
              })
 
-    view
-    |> form("#moment-trim", moment: %{title: "Stale", start: "0", stop: "1.5"})
-    |> render_submit()
+    cut(view, "0", "1.5")
+    view |> form("#moment-trim", moment: %{title: "Stale"}) |> render_submit()
 
     assert render_async(view) =~ "changed in another session"
     assert {:ok, %{title: "Other session"}} = Moments.get(name)
@@ -128,5 +127,11 @@ defmodule SoundboardWeb.MomentsLiveTest do
     html = view |> element("form[phx-change=search_moments]") |> render_change(%{query: "joke"})
     assert html =~ "Sam joke"
     refute html =~ "Raid wipe"
+  end
+
+  defp cut(view, start, stop) do
+    assert has_element?(view, "#trim-start[type=hidden]")
+    render_change(view, "edit_selection", %{"moment" => %{"start" => start, "stop" => stop}})
+    assert has_element?(view, "#trim-start[value='#{start}']")
   end
 end

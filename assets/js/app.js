@@ -232,54 +232,314 @@ Hooks.FxStrip = {
     if (active) this.el.scrollLeft = active.offsetLeft - (this.el.clientWidth - active.offsetWidth) / 2
   }
 }
+// Moment cutter. The recording is decoded once with Web Audio, so "Play cut" plays
+// exactly the selected samples: no seeking an <audio> element (which iPad Safari
+// often ignores before buffering) and no timeupdate overshoot at the end.
+const MIN_CUT = 0.05
+const formatCutTime = (seconds) => {
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes}:${(seconds - minutes * 60).toFixed(2).padStart(5, "0")}`
+}
+const round2 = (value) => Math.round(value * 100) / 100
+
 Hooks.MomentEditor = {
   mounted() {
-    this.audio = this.el.querySelector("audio")
+    this.duration = Number(this.el.dataset.duration)
+    this.start = Number(this.el.dataset.start)
+    this.stop = Number(this.el.dataset.stop)
+    this.playhead = null
+    this.highlights = this.readHighlights()
+    this.cutter = this.el.querySelector("[data-cutter]")
+    this.wave = this.el.querySelector("[data-wave]")
+    this.canvas = this.wave.querySelector("canvas")
+    this.handles = {
+      start: this.wave.querySelector('[data-handle="start"]'),
+      stop: this.wave.querySelector('[data-handle="stop"]')
+    }
     const Ctor = getAudioContextCtor()
     this.context = Ctor ? new Ctor() : null
-    this.ranges = [...this.el.querySelectorAll("[data-range]")]
-    this.fields = [...this.el.querySelectorAll("[data-bound]")]
-    this.onRange = (event) => {
-      const field = this.fields.find(field => field.dataset.bound === event.target.dataset.range)
-      field.value = event.target.value
-      field.dispatchEvent(new Event("input", {bubbles: true}))
-    }
-    this.ranges.forEach(range => range.addEventListener("input", this.onRange))
-    this.onPlay = async () => {
-      await connectAudio(this.audio, this.context)
-      setElementGain(this.audio, 1)
-    }
-    this.onPreview = async () => {
-      await this.onPlay()
-      const start = Number(this.fields[0].value), stop = Number(this.fields[1].value)
-      if (!(start >= 0 && stop > start && stop <= Number(this.el.dataset.duration))) return
-      this.previewEnd = stop
-      this.audio.currentTime = start
-      await this.audio.play()
-    }
-    this.onTime = () => { if (this.previewEnd != null && this.audio.currentTime >= this.previewEnd) { this.audio.pause(); this.previewEnd = null } }
-    this.onPause = () => { this.previewEnd = null }
-    // Auto-trim and highlight chips move the range on the server, then ask to hear it.
-    this.handleEvent("moment-preview", () => this.onPreview())
-    this.preview = this.el.querySelector("[data-preview]")
-    this.preview.addEventListener("click", this.onPreview)
-    this.audio.addEventListener("play", this.onPlay)
-    this.audio.addEventListener("timeupdate", this.onTime)
-    this.audio.addEventListener("pause", this.onPause)
-    this.updated()
+    // iOS 17+: play through the silent switch like a media app.
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback" } catch (_) {}
+
+    this.onPointerDown = (event) => this.pointerDown(event)
+    this.onPointerMove = (event) => this.pointerMove(event)
+    this.onPointerUp = () => this.pointerUp()
+    this.onClick = (event) => this.click(event)
+    this.onKey = (event) => this.key(event)
+    this.onStopAll = () => this.stopPlayback()
+    this.wave.addEventListener("pointerdown", this.onPointerDown)
+    this.wave.addEventListener("pointermove", this.onPointerMove)
+    this.wave.addEventListener("pointerup", this.onPointerUp)
+    this.wave.addEventListener("pointercancel", this.onPointerUp)
+    this.cutter.addEventListener("click", this.onClick)
+    Object.values(this.handles).forEach(handle => handle.addEventListener("keydown", this.onKey))
+    window.addEventListener("phx:stop-all-sounds", this.onStopAll)
+    this.resizer = new ResizeObserver(() => this.draw())
+    this.resizer.observe(this.wave)
+    this.handleEvent("moment-preview", () => this.play("selection"))
+
+    this.load(this.el.dataset.src)
+    this.render()
   },
+
   updated() {
-    this.ranges?.forEach(range => { range.value = this.fields.find(field => field.dataset.bound === range.dataset.range).value })
+    if (this.el.dataset.src !== this.src) this.load(this.el.dataset.src)
+    this.highlights = this.readHighlights()
+    // The server echoes our own edits; it only moves the cut for Auto-trim/highlights.
+    if (!this.dragging) {
+      this.start = Number(this.el.dataset.start)
+      this.stop = Number(this.el.dataset.stop)
+    }
+    this.render()
   },
+
   destroyed() {
-    this.audio.pause()
-    this.preview.removeEventListener("click", this.onPreview)
-    this.ranges.forEach(range => range.removeEventListener("input", this.onRange))
-    this.audio.removeEventListener("play", this.onPlay)
-    this.audio.removeEventListener("timeupdate", this.onTime)
-    this.audio.removeEventListener("pause", this.onPause)
-    browserAudio.delete(this.audio)
+    this.stopPlayback()
+    this.resizer.disconnect()
+    window.removeEventListener("phx:stop-all-sounds", this.onStopAll)
     this.context?.close()
+  },
+
+  readHighlights() {
+    try { return JSON.parse(this.el.dataset.highlights || "[]") } catch (_) { return [] }
+  },
+
+  status(message) {
+    const status = this.wave.querySelector("[data-status]")
+    status.hidden = !message
+    status.textContent = message || ""
+  },
+
+  async load(src) {
+    this.src = src
+    this.stopPlayback()
+    this.buffer = null
+    this.peaks = null
+    this.draw()
+    if (!this.context) return this.status("This browser cannot play the editor. Use Download WAV.")
+    this.status("Loading audio…")
+    const token = (this.loading = {})
+
+    try {
+      const response = await fetch(src, {credentials: "same-origin"})
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const data = await response.arrayBuffer()
+      // Older Safari only has the callback form of decodeAudioData.
+      const buffer = await new Promise((resolve, reject) => {
+        const result = this.context.decodeAudioData(data, resolve, reject)
+        if (result && result.then) result.then(resolve, reject)
+      })
+      if (token !== this.loading) return
+      this.buffer = buffer
+      this.status(null)
+      this.draw()
+    } catch (_) {
+      if (token === this.loading) this.status("Could not load this recording. Try Download WAV.")
+    }
+  },
+
+  // --- selection ------------------------------------------------------------
+
+  setBound(bound, seconds) {
+    if (bound === "start") this.start = round2(clamp(seconds, 0, this.stop - MIN_CUT))
+    else this.stop = round2(clamp(seconds, this.start + MIN_CUT, this.duration))
+    this.render()
+  },
+
+  // Hidden form fields carry the cut to the server (save, publish, Auto-trim).
+  push() {
+    const start = this.el.querySelector("#trim-start")
+    const stop = this.el.querySelector("#trim-stop")
+    if (!start || !stop) return
+    start.value = this.start
+    stop.value = this.stop
+    start.dispatchEvent(new Event("input", {bubbles: true}))
+  },
+
+  render() {
+    const percent = (seconds) => `${(seconds / this.duration) * 100}%`
+    this.wave.querySelector('[data-shade="start"]').style.cssText = `left:0;width:${percent(this.start)}`
+    this.wave.querySelector('[data-shade="stop"]').style.cssText = `left:${percent(this.stop)};right:0`
+    for (const [bound, handle] of Object.entries(this.handles)) {
+      const value = this[bound]
+      handle.style.left = percent(value)
+      handle.setAttribute("aria-valuemax", this.duration)
+      handle.setAttribute("aria-valuenow", value)
+      handle.setAttribute("aria-valuetext", formatCutTime(value))
+    }
+    this.cutter.querySelector('[data-time="start"]').textContent = formatCutTime(this.start)
+    this.cutter.querySelector('[data-time="stop"]').textContent = formatCutTime(this.stop)
+    this.cutter.querySelector('[data-time="length"]').textContent = `${(this.stop - this.start).toFixed(2)} s`
+    this.renderPlayhead()
+    this.draw()
+  },
+
+  renderPlayhead() {
+    const line = this.wave.querySelector("[data-playhead]")
+    line.hidden = this.playhead == null
+    if (this.playhead != null) line.style.left = `${(this.playhead / this.duration) * 100}%`
+  },
+
+  draw() {
+    const width = this.wave.clientWidth
+    const height = this.wave.clientHeight
+    if (!width || !height) return
+    const ratio = window.devicePixelRatio || 1
+    this.canvas.width = Math.round(width * ratio)
+    this.canvas.height = Math.round(height * ratio)
+    const ctx = this.canvas.getContext("2d")
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
+    ctx.clearRect(0, 0, width, height)
+
+    // Highlights are a band along the top so they never hide the waveform.
+    for (const [from, to] of this.highlights) {
+      ctx.fillStyle = "#f59e0b"
+      ctx.fillRect((from / this.duration) * width, 0, ((to - from) / this.duration) * width, 5)
+    }
+    if (!this.buffer) return
+
+    const columns = Math.floor(width / 3)
+    if (!this.peaks || this.peaks.length !== columns) this.peaks = this.computePeaks(columns)
+    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches
+    const middle = height / 2
+    this.peaks.forEach((peak, index) => {
+      const time = ((index + 0.5) / columns) * this.duration
+      const inside = time >= this.start && time <= this.stop
+      ctx.fillStyle = inside ? (dark ? "#60a5fa" : "#2563eb") : (dark ? "#4b5563" : "#9ca3af")
+      const bar = Math.max(1, peak * (height - 8))
+      ctx.fillRect(index * 3, middle - bar / 2, 2, bar)
+    })
+  },
+
+  computePeaks(columns) {
+    const samples = this.buffer.getChannelData(0)
+    const size = Math.max(1, Math.floor(samples.length / columns))
+    const peaks = new Array(columns)
+    let loudest = 0
+    for (let column = 0; column < columns; column++) {
+      let peak = 0
+      const end = Math.min(samples.length, (column + 1) * size)
+      for (let index = column * size; index < end; index++) {
+        const value = Math.abs(samples[index])
+        if (value > peak) peak = value
+      }
+      peaks[column] = peak
+      if (peak > loudest) loudest = peak
+    }
+    // Normalise so quiet voice chat still shows a readable shape.
+    return peaks.map(peak => (loudest > 0 ? Math.sqrt(peak / loudest) : 0))
+  },
+
+  timeAt(event) {
+    const box = this.wave.getBoundingClientRect()
+    return clamp((event.clientX - box.left) / box.width, 0, 1) * this.duration
+  },
+
+  // --- touch and mouse ------------------------------------------------------
+
+  pointerDown(event) {
+    const handle = event.target.closest("[data-handle]")
+    event.preventDefault()
+    this.wave.setPointerCapture(event.pointerId)
+    if (handle) {
+      this.dragging = handle.dataset.handle
+      handle.focus({preventScroll: true})
+    } else {
+      // Tap anywhere else: move the playhead there and listen from it.
+      this.playhead = this.timeAt(event)
+      this.renderPlayhead()
+      this.play("all", true)
+    }
+  },
+
+  pointerMove(event) {
+    if (!this.dragging) return
+    this.setBound(this.dragging, this.timeAt(event))
+  },
+
+  pointerUp() {
+    if (!this.dragging) return
+    const bound = this.dragging
+    this.dragging = null
+    this.push()
+    this.audition(bound)
+  },
+
+  key(event) {
+    const bound = event.target.dataset.handle
+    const step = event.shiftKey ? 0.5 : 0.05
+    const moves = {ArrowLeft: -step, ArrowDown: -step, ArrowRight: step, ArrowUp: step}
+    if (!(event.key in moves)) return
+    event.preventDefault()
+    this.setBound(bound, this[bound] + moves[event.key])
+    this.push()
+  },
+
+  click(event) {
+    const button = event.target.closest("button")
+    if (!button || !this.cutter.contains(button)) return
+    if (button.dataset.nudge) {
+      const [bound, delta] = button.dataset.nudge.split(":")
+      this.setBound(bound, this[bound] + Number(delta))
+      this.push()
+      this.audition(bound)
+    } else if (button.dataset.mark) {
+      if (this.playhead == null) return
+      this.setBound(button.dataset.mark, this.playhead)
+      this.push()
+    } else if (button.dataset.play) {
+      this.play(button.dataset.play)
+    }
+  },
+
+  // After moving an end, play the two seconds around it so the edge can be judged.
+  audition(bound) {
+    if (bound === "start") this.playRange(this.start, Math.min(this.stop, this.start + 2), "selection")
+    else this.playRange(Math.max(this.start, this.stop - 2), this.stop, "selection")
+  },
+
+  // --- playback -------------------------------------------------------------
+
+  play(mode, restart = false) {
+    if (this.mode === mode && !restart) return this.stopPlayback()
+    if (mode === "selection") return this.playRange(this.start, this.stop, mode)
+    let from = this.playhead ?? this.start
+    if (from >= this.duration - MIN_CUT) from = 0
+    this.playRange(from, this.duration, mode)
+  },
+
+  async playRange(from, to, mode) {
+    if (!this.buffer || !this.context) return
+    this.stopPlayback()
+    if (this.context.state === "suspended") await this.context.resume()
+    const source = this.context.createBufferSource()
+    const gain = this.context.createGain()
+    gain.gain.value = masterGain
+    source.buffer = this.buffer
+    source.connect(gain).connect(this.context.destination)
+    source.onended = () => { if (this.source === source) this.stopPlayback() }
+    source.start(0, from, Math.max(0.01, to - from))
+    this.source = source
+    this.mode = mode
+    this.startedAt = this.context.currentTime
+    this.offset = from
+    this.cutter.dataset.playing = mode
+    const tick = () => {
+      if (this.source !== source) return
+      this.playhead = Math.min(to, this.offset + this.context.currentTime - this.startedAt)
+      this.renderPlayhead()
+      this.frame = requestAnimationFrame(tick)
+    }
+    tick()
+  },
+
+  stopPlayback() {
+    if (this.frame) cancelAnimationFrame(this.frame)
+    const source = this.source
+    this.source = null
+    this.mode = null
+    if (this.cutter) delete this.cutter.dataset.playing
+    try { source?.stop() } catch (_) {}
   }
 }
 Hooks.LocalPlayer = {

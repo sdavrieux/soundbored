@@ -56,24 +56,34 @@ FFmpeg with libopus and Unix `sh`/`mkfifo`, included in the Alpine image.
    Signed-in speakers are tagged automatically. **Skip** keeps a dated name.
 4. Open **Saved moments** from the sidebar and select a recording. Search by name
    or tap several tags to show only moments that have all of them.
-5. Play it, choose start/end using the sliders or exact second fields, and use
-   **Preview selection** to hear the trim. **Auto-trim** selects from just before
-   the first word to just after the last one (of the speakers you kept) and plays
-   it. **🔥 highlight** chips jump to the loudest bursts and the spots where
-   several people talk or laugh at once, with two seconds of lead-in.
-6. When several people spoke, the **Speakers** chips list them by Discord display
-   name. Tap a name to leave that person out; the player switches to the new mix
-   so you can hear it before saving.
-7. **Save changes** replaces the private recording with the chosen range,
-   speakers and name. **Publish to Sounds** creates a dashboard sound from the current range,
-   leaving the private recording unchanged. Published clips receive a moments tag plus the moment's own tags.
-8. **Download WAV** exports a private copy. **Delete moment** asks for confirmation
+5. **Cut** shows the recording as a waveform. Drag the two blue handles to the
+   start and end of the part you want, or tap the waveform to listen from that
+   point and press **Set to playhead** under Start or End. **−** and **+** move an
+   end by 0.1 s and replay the two seconds around it, so edges are easy to judge
+   by ear. **Play cut** plays exactly the selection; **Play from playhead** keeps
+   going to the end of the recording.
+6. **Auto-trim** cuts from just before the first word to just after the last one
+   (of the speakers you kept) and plays it. **🔥** chips jump to the loudest bursts
+   and the spots where several people talk or laugh at once, with two seconds of
+   lead-in; they are also marked in amber along the top of the waveform.
+7. When several people spoke, the **Speakers** chips list them by Discord display
+   name. Tap a name to leave that person out; the waveform and player switch to
+   the new mix so you can hear it before saving.
+8. Under **Finish**, **Publish cut to Sounds** adds the cut as a new dashboard
+   sound (it needs a name) and leaves the recording as it is; published clips get
+   a moments tag plus the moment's own tags. **Save cut to this recording** keeps
+   only the cut and chosen speakers in the private recording.
+9. **Download WAV** exports a private copy. **Delete moment** asks for confirmation
    and removes the private recording; published dashboard sounds remain separate.
 
 Edits carry a revision check so an older tab cannot overwrite a newer trim.
 Invalid ranges, missing clips and duplicate dashboard names produce an error.
 The editor supports the mono 48 kHz PCM WAV format produced by capture; trimming
-copies exact samples without re-encoding. Title/revision metadata stays beside
+copies exact samples without re-encoding. The browser decodes the recording once
+with Web Audio and plays the selection from that buffer, so previews start and
+stop on the exact samples that a save keeps (rather than seeking an audio
+element, which iPad Safari often ignores before the file has buffered). On iOS 17
+and later, previews play even with the silent switch on. Title/revision metadata stays beside
 recordings in private JSON files.
 
 Exports trim the dead air before the first and after the last word (keeping a

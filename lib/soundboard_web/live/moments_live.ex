@@ -326,7 +326,11 @@ defmodule SoundboardWeb.MomentsLive do
             :if={@selected}
             id={"moment-editor-#{@selected.name}-#{@selected.revision}"}
             phx-hook="MomentEditor"
+            data-src={audio_src(@selected, @selection)}
             data-duration={@selected.duration}
+            data-start={@selection["start"]}
+            data-stop={@selection["stop"]}
+            data-highlights={Jason.encode!(Enum.map(@highlights, &[&1.start, &1.stop]))}
           >
             <button type="button" phx-click="close_moment" class="moment-back">
               <.icon name="hero-chevron-left" class="w-5 h-5" /> All moments
@@ -334,51 +338,55 @@ defmodule SoundboardWeb.MomentsLive do
             <h2 class="text-xl font-semibold break-words">
               <.moment_title id="editor" moment={@selected} />
             </h2>
-            <p class="mt-1 mb-4 text-sm text-gray-500 dark:text-gray-400">
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
               <.local_time id="editor-meta" at={@selected.recorded_at} />
               · {format_duration(@selected.duration)}
             </p>
-            <audio
-              controls
-              preload="metadata"
-              class="w-full"
-              src={audio_src(@selected, @selection)}
-              aria-label="Play saved moment"
-            />
-            <form
-              id="moment-trim"
-              phx-change="edit_selection"
-              phx-submit="save_changes"
-              class="mt-6 space-y-5"
-            >
-              <label class="block font-medium">
-                Name<input
-                  name="moment[title]"
-                  value={@selection["title"]}
-                  maxlength="100"
-                  placeholder="Untitled moment"
-                  autocomplete="off"
-                  class="field mt-1"
+
+            <section class="editor-section" aria-labelledby="cut-heading">
+              <h3 id="cut-heading" class="editor-heading">Cut</h3>
+              <div id={"cutter-#{@selected.name}-#{@selected.revision}"} phx-update="ignore">
+                <.cutter />
+              </div>
+              <div class="cut-tools">
+                <button
+                  type="button"
+                  phx-click="auto_trim"
+                  class="chip"
+                  disabled={@busy or @analysis == nil}
+                  title="Cut the silence before the first and after the last word"
+                >
+                  <.icon name="hero-scissors" class="w-4 h-4" /> Auto-trim
+                </button>
+                <span :if={@analysis == nil} class="field-hint">Finding highlights…</span>
+                <button
+                  :for={{highlight, index} <- Enum.with_index(@highlights)}
+                  type="button"
+                  phx-click="jump_highlight"
+                  phx-value-index={index}
+                  class="chip chip-highlight"
                   disabled={@busy}
-                />
-              </label>
-              <label class="block font-medium">
-                Tags<input
-                  name="moment[tags]"
-                  value={@selection["tags"]}
-                  placeholder="funny, fail, raid"
-                  autocomplete="off"
-                  class="field mt-1"
-                  disabled={@busy}
-                />
-                <span class="field-hint">
-                  Separate with commas. Published sounds get these tags too.
-                </span>
-              </label>
-              <fieldset :if={@selected.speakers != []} class="trim-box" id="moment-speakers">
-                <legend class="font-medium">Speakers</legend>
+                  title="Cut around this highlight and play it"
+                >
+                  🔥 {format_clock(highlight.at)}
+                  <span class="chip-count">{highlight_label(highlight)}</span>
+                </button>
+              </div>
+            </section>
+
+            <form id="moment-trim" phx-change="edit_selection" phx-submit="save_changes">
+              <input type="hidden" id="trim-start" name="moment[start]" value={@selection["start"]} />
+              <input type="hidden" id="trim-stop" name="moment[stop]" value={@selection["stop"]} />
+
+              <section
+                :if={@selected.speakers != []}
+                id="moment-speakers"
+                class="editor-section"
+                aria-labelledby="speakers-heading"
+              >
+                <h3 id="speakers-heading" class="editor-heading">Speakers</h3>
                 <input type="hidden" name="moment[speakers][]" value="" />
-                <div class="chip-row">
+                <div class="chip-wrap">
                   <label
                     :for={speaker <- @selected.speakers}
                     class={["chip", speaker.id in (@selection["speakers"] || []) && "is-active"]}
@@ -398,98 +406,78 @@ defmodule SoundboardWeb.MomentsLive do
                   Keep at least one speaker.
                 </p>
                 <p :if={(@selection["speakers"] || []) != []} class="field-hint">
-                  Tap a name to leave them out. The player above plays the new mix.
+                  Tap a name to leave them out. The waveform and player switch to the new mix.
                 </p>
-              </fieldset>
-              <fieldset class="trim-box">
-                <legend class="font-medium">Trim</legend>
-                <div class="highlight-row" aria-label="Highlights">
-                  <span :if={@analysis == nil} class="field-hint">Finding highlights…</span>
-                  <span :if={@analysis != nil and @highlights == []} class="field-hint">
-                    No standout moments found.
+              </section>
+
+              <section class="editor-section space-y-4" aria-labelledby="label-heading">
+                <h3 id="label-heading" class="editor-heading">Name and tags</h3>
+                <label class="block font-medium">
+                  Name<input
+                    id="moment-title"
+                    name="moment[title]"
+                    value={@selection["title"]}
+                    maxlength="100"
+                    placeholder="e.g. Sam's clutch save"
+                    autocomplete="off"
+                    phx-debounce="300"
+                    class="field mt-1"
+                    disabled={@busy}
+                  />
+                </label>
+                <label class="block font-medium">
+                  Tags<input
+                    name="moment[tags]"
+                    value={@selection["tags"]}
+                    placeholder="funny, fail, raid"
+                    autocomplete="off"
+                    phx-debounce="300"
+                    class="field mt-1"
+                    disabled={@busy}
+                  />
+                  <span class="field-hint">
+                    Separate with commas. Published sounds get these tags too.
                   </span>
-                  <button
-                    :for={{highlight, index} <- Enum.with_index(@highlights)}
-                    type="button"
-                    phx-click="jump_highlight"
-                    phx-value-index={index}
-                    class="chip chip-highlight"
-                    disabled={@busy}
-                    title="Select and play this highlight"
-                  >
-                    🔥 {format_clock(highlight.at)}
-                    <span class="chip-count">{highlight_label(highlight)}</span>
-                  </button>
+                </label>
+              </section>
+
+              <section class="editor-section" aria-labelledby="finish-heading">
+                <h3 id="finish-heading" class="editor-heading">Finish</h3>
+                <div class="finish-grid">
+                  <div class="finish-option">
+                    <button
+                      id="publish-moment"
+                      type="button"
+                      phx-click="publish_moment"
+                      class="studio-button btn-primary w-full"
+                      disabled={@busy}
+                    >
+                      <.icon name="hero-arrow-up-tray" class="w-5 h-5" /> Publish cut to Sounds
+                    </button>
+                    <p
+                      :if={untitled?(@selection)}
+                      class="field-hint text-amber-700 dark:text-amber-400"
+                    >
+                      Add a name above to publish.
+                    </p>
+                    <p :if={!untitled?(@selection)} class="field-hint">
+                      Adds the cut as a new sound on the board. This recording stays as it is.
+                    </p>
+                  </div>
+                  <div class="finish-option">
+                    <button type="submit" class="studio-button btn-secondary w-full" disabled={@busy}>
+                      <.icon name="hero-check" class="w-5 h-5" /> Save cut to this recording
+                    </button>
+                    <p class="field-hint">
+                      Keeps only the cut and chosen speakers in this private recording.
+                    </p>
+                  </div>
                 </div>
-                <div
-                  :for={{bound, label, min} <- [{"start", "Start", "0"}, {"stop", "End", "0.05"}]}
-                  class="trim-row"
-                >
-                  <label for={"trim-#{bound}"} class="trim-label">{label}</label>
-                  <input
-                    data-range={bound}
-                    type="range"
-                    min={min}
-                    max={@selected.duration}
-                    step="0.01"
-                    value={@selection[bound]}
-                    aria-label={"#{label} position"}
-                    class="trim-slider"
-                    disabled={@busy}
-                  />
-                  <input
-                    id={"trim-#{bound}"}
-                    data-bound={bound}
-                    name={"moment[#{bound}]"}
-                    type="number"
-                    inputmode="decimal"
-                    step="0.01"
-                    min={min}
-                    max={@selected.duration}
-                    value={@selection[bound]}
-                    required
-                    class="field trim-seconds"
-                    disabled={@busy}
-                  />
-                  <span class="text-sm text-gray-500 dark:text-gray-400">s</span>
-                </div>
-                <button
-                  type="button"
-                  data-preview
-                  class="studio-button btn-secondary w-full sm:w-auto"
-                  disabled={@busy}
-                >
-                  <.icon name="hero-play" class="w-5 h-5" /> Preview selection
-                </button>
-                <button
-                  type="button"
-                  phx-click="auto_trim"
-                  class="studio-button btn-secondary w-full sm:w-auto"
-                  disabled={@busy or @analysis == nil}
-                  title="Cut the silence before the first and after the last word"
-                >
-                  <.icon name="hero-scissors" class="w-5 h-5" /> Auto-trim
-                </button>
-              </fieldset>
-              <div class="flex flex-col sm:flex-row gap-3">
-                <button
-                  type="button"
-                  phx-click="publish_moment"
-                  class="studio-button btn-primary"
-                  disabled={@busy}
-                >
-                  <.icon name="hero-arrow-up-tray" class="w-5 h-5" /> Publish to Sounds
-                </button>
-                <button type="submit" class="studio-button btn-secondary" disabled={@busy}>
-                  Save changes
-                </button>
-              </div>
-              <p class="field-hint">
-                Saving a trim or speaker change replaces this private recording. Publishing makes a copy in Sounds
-                and leaves the recording as it is.
-              </p>
+                <p :if={@busy} role="status" class="field-hint">Working…</p>
+              </section>
             </form>
-            <div class="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-3 items-center">
+
+            <div class="editor-section flex flex-wrap gap-3 items-center">
               <a href={"/recordings/#{@selected.name}"} download class="studio-button btn-secondary">
                 <.icon name="hero-arrow-down-tray" class="w-5 h-5" /> Download WAV
               </a>
@@ -502,7 +490,6 @@ defmodule SoundboardWeb.MomentsLive do
               >
                 <.icon name="hero-trash" class="w-5 h-5" /> Delete moment
               </button>
-              <span :if={@busy} role="status" class="text-sm">Working…</span>
             </div>
           </div>
         </div>
@@ -510,6 +497,69 @@ defmodule SoundboardWeb.MomentsLive do
     </div>
     """
   end
+
+  # Driven entirely by the MomentEditor hook: LiveView never patches inside it, so
+  # dragging and playback are never interrupted by server updates.
+  defp cutter(assigns) do
+    ~H"""
+    <div class="cutter" data-cutter>
+      <div class="wave" data-wave>
+        <canvas aria-hidden="true"></canvas>
+        <div class="wave-shade" data-shade="start"></div>
+        <div class="wave-shade" data-shade="stop"></div>
+        <div class="wave-playhead" data-playhead hidden></div>
+        <button
+          :for={{bound, label} <- [{"start", "Start of the cut"}, {"stop", "End of the cut"}]}
+          type="button"
+          class="wave-handle"
+          data-handle={bound}
+          role="slider"
+          aria-label={label}
+          aria-valuemin="0"
+        >
+        </button>
+        <p class="wave-status" data-status>Loading audio…</p>
+      </div>
+      <div class="cut-times">
+        <div
+          :for={{bound, label} <- [{"start", "Start"}, {"stop", "End"}]}
+          class={"cut-bound cut-#{bound}"}
+        >
+          <span class="cut-label">{label}</span>
+          <div class="cut-nudge">
+            <button type="button" data-nudge={"#{bound}:-0.1"} aria-label={"#{label} 0.1 s earlier"}>
+              −
+            </button>
+            <output class="cut-time" data-time={bound}>0:00.00</output>
+            <button type="button" data-nudge={"#{bound}:0.1"} aria-label={"#{label} 0.1 s later"}>
+              +
+            </button>
+          </div>
+          <button type="button" class="cut-mark" data-mark={bound}>Set to playhead</button>
+        </div>
+        <div class="cut-length">
+          <span class="cut-label">Length</span>
+          <output class="cut-time" data-time="length">0.00 s</output>
+        </div>
+      </div>
+      <div class="cut-transport">
+        <button type="button" class="studio-button btn-primary" data-play="selection">
+          <span data-idle><.icon name="hero-play-solid" class="w-5 h-5" /> Play cut</span>
+          <span data-busy><.icon name="hero-stop-solid" class="w-5 h-5" /> Stop</span>
+        </button>
+        <button type="button" class="studio-button btn-secondary" data-play="all">
+          <span data-idle><.icon name="hero-play" class="w-5 h-5" /> Play from playhead</span>
+          <span data-busy><.icon name="hero-stop-solid" class="w-5 h-5" /> Stop</span>
+        </button>
+      </div>
+      <p class="field-hint">
+        Drag the blue handles, or tap the waveform to listen from there and use <strong>Set to playhead</strong>. − and + move an end by 0.1 s and replay it.
+      </p>
+    </div>
+    """
+  end
+
+  defp untitled?(selection), do: String.trim(selection["title"] || "") == ""
 
   attr :id, :string, required: true
   attr :moment, :map, required: true

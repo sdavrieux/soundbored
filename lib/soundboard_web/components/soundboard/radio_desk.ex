@@ -3,14 +3,37 @@ defmodule SoundboardWeb.Components.Soundboard.RadioDesk do
   use Phoenix.Component
   import SoundboardWeb.CoreComponents, only: [icon: 1]
   alias Phoenix.LiveView.JS
+  alias Soundboard.AudioPlayer.Effects
 
   attr :volume, :integer, required: true
   attr :capture, :map, required: true
   attr :naming, :map, default: nil
+  attr :effect, :string, default: nil
 
   def radio_desk(assigns) do
     ~H"""
     <section class="studio-controls" aria-label="Playback controls">
+      <div
+        id="fx-chips"
+        class="fx-strip"
+        role="group"
+        aria-label="Play sounds with an effect"
+        phx-hook="FxStrip"
+      >
+        <span class="fx-label" aria-hidden="true">FX</span>
+        <button
+          :for={effect <- Effects.all()}
+          id={"fx-#{effect.id}"}
+          type="button"
+          phx-click="toggle_effect"
+          phx-value-effect={effect.id}
+          aria-pressed={to_string(@effect == effect.id)}
+          class={["fx-chip", @effect == effect.id && "is-active"]}
+          title={"Play sounds in Discord with the #{effect.label} effect"}
+        >
+          <span aria-hidden="true">{effect.icon}</span> {effect.label}
+        </button>
+      </div>
       <div class="master-control">
         <label for="master-volume">
           <span><.volume_icon volume={@volume} /> Master volume</span>

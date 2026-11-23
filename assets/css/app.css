@@ -74,7 +74,7 @@ body {
 .phx-change-loading .search-icon { display: none; }
 
 /* ---------- Layout: sidebar, phone bar, bottom desk ---------- */
-body { --studio-sidebar-width:220px; --desk-height:84px; --phone-bar-height:0px; }
+body { --studio-sidebar-width:220px; --desk-height:132px; --phone-bar-height:0px; }
 body.sidebar-collapsed { --studio-sidebar-width:64px; }
 .studio-sidebar { position:fixed; inset:0 auto 0 0; width:var(--studio-sidebar-width); z-index:40; padding:24px 8px; background:#111827; color:#d1d5db; border-right:1px solid #374151; display:flex; flex-direction:column; transition:transform .2s ease; }
 .sidebar-header { display:flex; align-items:center; justify-content:space-between; min-height:44px; margin-bottom:24px; }
@@ -103,6 +103,14 @@ body.sidebar-collapsed { --studio-sidebar-width:64px; }
 .master-control input:focus-visible::-webkit-slider-thumb { outline:3px solid #bfdbfe; outline-offset:2px; }
 .master-control input:focus-visible::-moz-range-thumb { outline:3px solid #bfdbfe; outline-offset:2px; }
 .desk-buttons { display:flex; gap:8px; margin-left:auto; }
+.studio-controls { flex-wrap:wrap; row-gap:8px; }
+.fx-strip { position:relative; flex-basis:100%; display:flex; align-items:center; gap:6px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px; }
+.fx-strip::-webkit-scrollbar { display:none; }
+.fx-label { flex:none; font-size:11px; font-weight:700; letter-spacing:.08em; color:#9ca3af; padding-right:2px; }
+.fx-chip { flex:none; display:inline-flex; align-items:center; gap:4px; min-height:36px; padding:0 12px; border-radius:999px; border:1px solid #4b5563; background:#1f2937; color:#e5e7eb; font-size:13px; font-weight:500; white-space:nowrap; }
+.fx-chip:hover { border-color:#9ca3af; }
+.fx-chip:focus-visible { outline:2px solid #a78bfa; outline-offset:2px; }
+.fx-chip.is-active { background:#7c3aed; border-color:#a78bfa; color:#fff; }
 .capture-button { border:1px solid #4b5563; color:#f3f4f6; font-variant-numeric:tabular-nums; }
 .capture-button.is-live { border-color:#f87171; color:#fecaca; background:#7f1d1d55; }
 .capture-dot { width:10px; height:10px; border-radius:50%; background:#ef4444; flex-shrink:0; animation:pulse 1.4s ease-in-out infinite; }
@@ -144,9 +152,6 @@ body.sidebar-collapsed { --studio-sidebar-width:64px; }
 .chip-highlight { border-color:#f59e0b; }
 .chip-highlight:hover { border-color:#d97706; }
 .highlight-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
-.fx-row { margin-top:10px; }
-.fx-label { font-size:12px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#6b7280; }
-.chip-fx.is-active { background:#7c3aed; border-color:#7c3aed; color:#fff; }
 
 .sound-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:12px; }
 .sound-pad { position:relative; min-height:96px; border-radius:12px; background:#fff; border:1px solid #e5e7eb; box-shadow:0 1px 2px #0000000d; transition:box-shadow .15s, transform .1s; }
@@ -198,7 +203,7 @@ body.sidebar-collapsed { --studio-sidebar-width:64px; }
 
 /* ---------- Phone ---------- */
 @media (max-width:639px) {
-  body { --studio-sidebar-width:0px; --desk-height:132px; --phone-bar-height:52px; }
+  body { --studio-sidebar-width:0px; --desk-height:176px; --phone-bar-height:52px; }
   .phone-bar { display:flex; position:sticky; top:0; z-index:30; align-items:center; gap:8px; height:52px; padding:0 8px; background:#111827; color:#f3f4f6; border-bottom:1px solid #374151; }
   .phone-brand { font-weight:700; font-size:18px; }
   .studio-sidebar { width:260px; transform:translateX(-100%); padding:12px 8px; }
@@ -243,9 +248,7 @@ body.sidebar-collapsed { --studio-sidebar-width:64px; }
   .chip { border-color:#4b5563; background:#1f2937; color:#e5e7eb; }
   .chip:hover { border-color:#6b7280; }
   .chip.is-active { background:#3b82f6; border-color:#3b82f6; color:#fff; }
-  .chip-fx.is-active { background:#8b5cf6; border-color:#8b5cf6; }
   .chip-highlight { border-color:#b45309; }
-  .fx-label { color:#9ca3af; }
   .sound-pad { background:#1f2937; border-color:#374151; }
   .sound-pad-name { color:#f3f4f6; }
   .sound-pad-tag { background:#1e3a8a80; color:#bfdbfe; }

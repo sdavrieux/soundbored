@@ -2,7 +2,7 @@ defmodule SoundboardWeb.Live.Support.StudioControls do
   @moduledoc false
   import Phoenix.LiveView
   import Phoenix.Component
-  alias Soundboard.{AudioPlayer, Capture, MasterVolume, PubSubTopics}
+  alias Soundboard.{AudioPlayer, AudioPlayer.Effects, Capture, MasterVolume, PubSubTopics}
   alias Soundboard.Capture.Moments
 
   def on_mount(:default, _params, session, socket) do
@@ -20,6 +20,7 @@ defmodule SoundboardWeb.Live.Support.StudioControls do
      |> assign(:studio_volume, MasterVolume.get())
      |> assign(:studio_capture, Capture.status())
      |> assign(:studio_naming, nil)
+     |> assign(:effect, saved_effect(socket))
      |> attach_hook(:studio_events, :handle_event, &handle_event/3)
      |> attach_hook(:studio_messages, :handle_info, &handle_info/2)}
   end
@@ -42,7 +43,26 @@ defmodule SoundboardWeb.Live.Support.StudioControls do
     end
   end
 
+  # FX stay on until tapped again. The browser remembers the choice so it follows
+  # you between pages; every play from a studio page reads it.
+  def handle_event("toggle_effect", %{"effect" => effect}, socket) do
+    effect =
+      if socket.assigns.effect == effect or not Effects.valid?(effect), do: nil, else: effect
+
+    {:halt, socket |> assign(:effect, effect) |> push_event("fx-changed", %{effect: effect})}
+  end
+
   def handle_event(_, _, socket), do: {:cont, socket}
+
+  defp saved_effect(socket) do
+    with true <- connected?(socket),
+         %{"fx" => effect} <- get_connect_params(socket),
+         true <- Effects.valid?(effect) do
+      effect
+    else
+      _ -> nil
+    end
+  end
 
   defp act("set_master_volume", %{"volume" => volume}, socket) do
     case MasterVolume.set(volume) do
@@ -118,7 +138,9 @@ defmodule SoundboardWeb.Live.Support.StudioControls do
 
     socket =
       case result do
-        {:ok, _} -> put_flash(socket, :info, "Moment saved")
+        {:ok, _} ->
+          put_flash(socket, :info, "Moment saved")
+
         {:error, reason} ->
           socket |> assign(:studio_naming, nil) |> put_flash(:error, error_message(reason))
       end

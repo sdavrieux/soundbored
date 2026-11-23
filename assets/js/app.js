@@ -219,6 +219,19 @@ Hooks.LocalTime = {
   }
 }
 
+// Keeps the active FX chip visible in the scrolling strip. Only re-centres when the
+// choice changes, so the capture timer's updates don't fight someone scrolling.
+Hooks.FxStrip = {
+  mounted() { this.reveal() },
+  updated() { this.reveal() },
+  reveal() {
+    const active = this.el.querySelector(".is-active")
+    const id = active?.id || null
+    if (id === this.shown) return
+    this.shown = id
+    if (active) this.el.scrollLeft = active.offsetLeft - (this.el.clientWidth - active.offsetWidth) / 2
+  }
+}
 Hooks.MomentEditor = {
   mounted() {
     this.audio = this.el.querySelector("audio")
@@ -715,8 +728,18 @@ Hooks.CopyButton = {
   }
 }
 
+// The FX chosen in the bottom bar follows you between pages and reloads.
+const fxKey = "soundboard-fx"
+window.addEventListener("phx:fx-changed", (event) => {
+  try {
+    if (event.detail.effect) localStorage.setItem(fxKey, event.detail.effect)
+    else localStorage.removeItem(fxKey)
+  } catch (_) {}
+})
+const savedFx = () => { try { return localStorage.getItem(fxKey) } catch (_) { return null } }
+
 let liveSocket = new LiveSocket("/live", Socket, {
-  params: {_csrf_token: csrfToken},
+  params: () => ({_csrf_token: csrfToken, fx: savedFx()}),
   hooks: Hooks
 })
 

@@ -89,12 +89,15 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       end
     end
 
-    test "an FX chip plays sounds with that effect until it is tapped again", %{conn: conn} do
+    test "a bottom bar FX chip plays sounds with that effect until it is tapped again", %{
+      conn: conn
+    } do
       {:ok, view, _html} = live(conn, "/")
-      assert has_element?(view, "#fx-chips #fx-robot[aria-pressed='false']")
+      assert has_element?(view, ".studio-controls #fx-chips #fx-robot[aria-pressed='false']")
 
       view |> element("#fx-robot") |> render_click()
       assert has_element?(view, "#fx-robot[aria-pressed='true']")
+      assert_push_event(view, "fx-changed", %{effect: "robot"})
 
       with_mock Soundboard.AudioPlayer, play_sound: fn _, _, _ -> :ok end do
         view |> element("[phx-click='play_random']") |> render_click()
@@ -103,11 +106,25 @@ defmodule SoundboardWeb.SoundboardLiveTest do
 
       view |> element("#fx-robot") |> render_click()
       assert has_element?(view, "#fx-robot[aria-pressed='false']")
+      assert_push_event(view, "fx-changed", %{effect: nil})
 
       with_mock Soundboard.AudioPlayer, play_sound: fn _, _ -> :ok end do
         view |> element("[phx-click='play_random']") |> render_click()
         assert_called(Soundboard.AudioPlayer.play_sound(:_, :_))
       end
+    end
+
+    test "the browser's saved FX is restored on every page and bad values are ignored", %{
+      conn: conn
+    } do
+      {:ok, view, _} = conn |> put_connect_params(%{"fx" => "demon"}) |> live("/")
+      assert has_element?(view, "#fx-demon[aria-pressed='true']")
+
+      {:ok, view, _} = conn |> put_connect_params(%{"fx" => "demon"}) |> live("/moments")
+      assert has_element?(view, "#fx-demon[aria-pressed='true']")
+
+      {:ok, view, _} = conn |> put_connect_params(%{"fx" => "rm -rf"}) |> live("/")
+      refute has_element?(view, ".fx-chip[aria-pressed='true']")
     end
 
     test "play random respects selected tags", %{conn: conn, user: user} do

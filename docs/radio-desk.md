@@ -1,8 +1,8 @@
 # Radio desk
 
 The sidebar opens Sounds, Saved moments, Favorites, Stats, and Settings. A fixed
-bottom bar keeps master volume, Start/Stop capture (with a live recording dot),
-Save last 60s, and Stop within reach on every page.
+bottom bar keeps the FX chips, master volume, Start/Stop capture (with a live
+recording dot), Save last 60s, and Stop within reach on every page.
 On iPad and desktop the sidebar toggle switches between full navigation and an
 icon rail; the choice is remembered in this browser. On phones a top bar opens
 navigation as a drawer over the content.
@@ -24,19 +24,20 @@ voices or the stored recordings. **Stop** stops Discord and browser playback.
 
 ## FX
 
-The **FX** chip row under the tag filters plays sounds in Discord through an
-effect: Chipmunk, Demon, Slow-mo, Fast, Reverse, Cathedral, Phone, Megaphone,
-Underwater, Robot, Drunk, 8D, Bass boost and Vaporwave. Tap a chip to turn it on;
-every sound you play from that page (including **Random**) uses it until you tap
-it again. The choice belongs to that browser tab only and starts off on reload.
+The **FX** chip strip along the top of the bottom bar plays sounds in Discord
+through an effect: Chipmunk, Demon, Slow-mo, Fast, Reverse, Cathedral, Phone,
+Megaphone, Underwater, Robot, Drunk, 8D, Bass boost and Vaporwave. Swipe it
+sideways on a phone. Tap a chip to turn it on; every sound you play from the
+board, Favorites or Stats (including **Random**) uses it until you tap it again.
+The choice is remembered by this browser across pages and reloads; other
+operators keep their own.
 
 Effects are FFmpeg filters applied while the sound is decoded, so stored sounds
 never change and master volume still applies. Each chain ends with a limiter.
 Pitch effects use `asetrate` and `atempo` rather than rubberband, and effected
 playback is paced with `arealtime` instead of `-re` so reversed and re-timed audio
 streams at the right speed. Reverse has to read the whole clip before it starts,
-so long URL sounds take a moment. Join/leave sounds, favorites and API plays stay
-dry.
+so long URL sounds take a moment. Join/leave sounds and API plays stay dry.
 
 The pinned EDA 0.1.3 dependency documents raw Enumerable input but only accepts
 lists internally. `mix deps.get` runs `scripts/prepare_voice_runtime.exs`, a small

@@ -1,6 +1,10 @@
 defmodule Soundboard.Capture.Moments do
-  @moduledoc "Private moment editing. Only our generated PCM WAV recordings are accepted."
-  alias Soundboard.Capture.Storage
+  @moduledoc """
+  Private moment editing. Only our generated PCM WAV recordings are accepted.
+  Moments with several speakers keep one stem per speaker so people can be left
+  out of the mix later; stems are trimmed together with the mix.
+  """
+  alias Soundboard.Capture.{Analysis, Storage, Wav}
   alias Soundboard.{PubSubTopics, Sounds}
 
   def list do
@@ -15,9 +19,11 @@ defmodule Soundboard.Capture.Moments do
 
   def get(name) do
     with {:ok, path} <- Storage.download_path(name),
-         {:ok, format} <- format(path),
+         {:ok, format} <- Wav.format(path),
          {:ok, stat} <- File.stat(path) do
       metadata = metadata(path)
+      speakers = speakers(name, metadata)
+      ids = Enum.map(speakers, & &1.id)
 
       {:ok,
        %{
@@ -27,10 +33,50 @@ defmodule Soundboard.Capture.Moments do
          recorded_at: recorded_at(name),
          tags: clean_tags(metadata["tags"]),
          revision: metadata["revision"] || "#{stat.size}-#{inspect(stat.mtime)}",
-         duration: format.size / format.rate
+         duration: format.size / format.rate,
+         speakers: speakers,
+         muted: Enum.filter(List.wrap(metadata["muted"]), &(&1 in ids))
        }}
     end
   end
+
+  # Stems are numbered by who spoke first; names come from the save, when known.
+  defp speakers(name, metadata) do
+    folder = Storage.stems_path(name)
+    names = if is_list(metadata["speakers"]), do: metadata["speakers"], else: []
+
+    with {:ok, %{type: :directory}} <- File.lstat(folder),
+         {:ok, files} <- File.ls(folder) do
+      count = Enum.count(files, &Regex.match?(~r/\A\d+\.wav\z/, &1))
+
+      speakers =
+        Enum.take_while(
+          1..count//1,
+          &match?({:ok, %{type: :regular}}, File.lstat(stem(name, &1)))
+        )
+        |> Enum.map(fn index ->
+          %{id: to_string(index), name: speaker_name(Enum.at(names, index - 1), index)}
+        end)
+
+      if length(speakers) > 1, do: speakers, else: []
+    else
+      _ -> []
+    end
+  end
+
+  defp speaker_name(name, index) when is_binary(name) do
+    case String.trim(name) do
+      "" -> "Speaker #{index}"
+      name -> String.slice(name, 0, 40)
+    end
+  end
+
+  defp speaker_name(_, index), do: "Speaker #{index}"
+
+  defp stem(name, id), do: Path.join(Storage.stems_path(name), "#{id}.wav")
+
+  @doc "Speakers currently heard in the saved mix."
+  def active_speakers(moment), do: Enum.map(moment.speakers, & &1.id) -- moment.muted
 
   @doc "Tags used by any saved moment, most used first."
   def all_tags(moments \\ list()) do
@@ -50,12 +96,24 @@ defmodule Soundboard.Capture.Moments do
       with {:ok, moment} <- get(name),
            {:ok, path} <- Storage.download_path(name),
            tags = clean_tags(moment.tags ++ clean_tags(attrs["tags"])),
-           :ok <- write_metadata(path, label_title(moment, attrs["title"]), tags) do
+           :ok <-
+             write_metadata(
+               path,
+               Map.merge(
+                 %{"title" => label_title(moment, attrs["title"]), "tags" => tags},
+                 speaker_names(attrs["speakers"])
+               )
+             ) do
         notify(name)
         get(name)
       end
     end)
   end
+
+  defp speaker_names(names) when is_list(names),
+    do: %{"speakers" => Enum.map(names, &if(is_binary(&1), do: String.slice(&1, 0, 40)))}
+
+  defp speaker_names(_), do: %{}
 
   defp label_title(moment, title) do
     case String.trim(to_string(title || "")) do
@@ -65,7 +123,7 @@ defmodule Soundboard.Capture.Moments do
   end
 
   def save(name, revision, attrs) do
-    locked(name, fn -> edit(name, revision, attrs, &replace_segment/3) end)
+    locked(name, fn -> edit(name, revision, attrs, &replace_segment/2) end)
   end
 
   def delete(name, revision) do
@@ -75,8 +133,8 @@ defmodule Soundboard.Capture.Moments do
   def publish(name, revision, attrs, user) do
     locked(name, fn ->
       edit(name, revision, attrs, fn
-        _segment, {nil, _tags}, _ -> {:error, :untitled}
-        segment, title_and_tags, _ -> publish_segment(segment, title_and_tags, user)
+        _segment, %{title: nil} -> {:error, :untitled}
+        segment, edit -> publish_segment(segment, edit, user)
       end)
     end)
   end
@@ -84,18 +142,88 @@ defmodule Soundboard.Capture.Moments do
   defp edit(name, revision, attrs, operation) do
     with {:ok, moment} <- current(name, revision),
          {:ok, title, start, stop} <- selection(moment, attrs),
+         {:ok, chosen} <- chosen_speakers(moment, attrs["speakers"]),
          {:ok, path} <- Storage.download_path(name) do
-      tags = clean_tags(attrs["tags"])
-      with_segment(path, start, stop, fn segment -> operation.(segment, {title, tags}, path) end)
+      edit = %{
+        moment: moment,
+        path: path,
+        title: title,
+        tags: clean_tags(attrs["tags"]),
+        start: start,
+        stop: stop,
+        chosen: chosen
+      }
+
+      in_work(&edit_in(&1, edit, operation))
     end
   end
 
-  defp replace_segment(segment, {title, tags}, path) do
-    with :ok <- write_metadata(path, title, tags), :ok <- File.rename(segment, path) do
-      name = Path.basename(path)
+  defp edit_in(work, edit, operation) do
+    segment = Path.join(work, "segment.wav")
+
+    with {:ok, source} <- source(edit.moment, edit.path, edit.chosen, work),
+         :ok <- Wav.copy_segment(source, segment, edit.start, edit.stop) do
+      operation.(segment, Map.put(edit, :work, work))
+    end
+  end
+
+  # No speaker list keeps whoever is in the mix now; an empty one is a mistake.
+  defp chosen_speakers(%{speakers: []}, _), do: {:ok, []}
+  defp chosen_speakers(moment, nil), do: {:ok, active_speakers(moment)}
+
+  defp chosen_speakers(moment, ids) when is_list(ids) do
+    case Enum.filter(Enum.map(moment.speakers, & &1.id), &(&1 in ids)) do
+      [] -> {:error, :no_speakers}
+      chosen -> {:ok, chosen}
+    end
+  end
+
+  defp chosen_speakers(_, _), do: {:error, :no_speakers}
+
+  defp source(moment, path, chosen, work) do
+    if chosen == [] or chosen == active_speakers(moment) do
+      {:ok, path}
+    else
+      output = Path.join(work, "speakers.wav")
+
+      with :ok <- Storage.mix(Enum.map(chosen, &stem(moment.name, &1)), output),
+           do: {:ok, output}
+    end
+  end
+
+  defp replace_segment(segment, edit) do
+    metadata = %{"title" => edit.title, "tags" => edit.tags}
+
+    metadata =
+      if edit.chosen == [],
+        do: metadata,
+        else: Map.put(metadata, "muted", Enum.map(edit.moment.speakers, & &1.id) -- edit.chosen)
+
+    with :ok <- trim_stems(edit),
+         :ok <- write_metadata(edit.path, metadata),
+         :ok <- File.rename(segment, edit.path) do
+      name = Path.basename(edit.path)
       notify(name)
       get(name)
     end
+  end
+
+  defp trim_stems(%{start: start, stop: stop, moment: moment})
+       when start == 0 and stop >= moment.duration - 0.001,
+       do: :ok
+
+  defp trim_stems(edit) do
+    Enum.reduce_while(edit.moment.speakers, :ok, fn %{id: id}, :ok ->
+      trimmed = Path.join(edit.work, "stem-#{id}.wav")
+      original = stem(edit.moment.name, id)
+
+      with :ok <- Wav.copy_segment(original, trimmed, edit.start, edit.stop),
+           :ok <- File.rename(trimmed, original) do
+        {:cont, :ok}
+      else
+        error -> {:halt, error}
+      end
+    end)
   end
 
   defp delete_current(name, revision) do
@@ -103,12 +231,13 @@ defmodule Soundboard.Capture.Moments do
          {:ok, path} <- Storage.download_path(name),
          :ok <- File.rm(path) do
       File.rm(path <> ".json")
+      File.rm_rf(Storage.stems_path(name))
       notify(name)
       :ok
     end
   end
 
-  defp publish_segment(segment, {title, tags}, user) do
+  defp publish_segment(segment, %{title: title, tags: tags}, user) do
     user
     |> Sounds.new_create_request(%{
       source_type: "local",
@@ -142,117 +271,132 @@ defmodule Soundboard.Capture.Moments do
     end
   end
 
-  # Parse RIFF chunks instead of assuming that FFmpeg's metadata is always the same size.
-  defp format(path) do
-    File.open(path, [:read, :binary], fn io ->
-      case IO.binread(io, 12) do
-        <<"RIFF", _::little-32, "WAVE">> -> chunks(io, nil)
-        _ -> {:error, :invalid_audio}
-      end
-    end)
-    |> unwrap()
-  end
-
-  defp chunks(io, rate) do
-    case IO.binread(io, 8) do
-      <<"fmt ", size::little-32>> when size >= 16 and size <= 1024 ->
-        read_format(io, size)
-
-      <<"data", size::little-32>> when not is_nil(rate) ->
-        {:ok, offset} = :file.position(io, :cur)
-        {:ok, %{offset: offset, size: size, rate: rate}}
-
-      <<_, _, _, _, size::little-32>> when size < 65_536 ->
-        :file.position(io, {:cur, size + rem(size, 2)})
-        chunks(io, rate)
-
-      _ ->
-        {:error, :invalid_audio}
-    end
-  end
-
-  defp read_format(io, size) do
-    case IO.binread(io, size) do
-      <<1::little-16, 1::little-16, 48_000::little-32, 96_000::little-32, 2::little-16,
-        16::little-16, _::binary>> ->
-        if rem(size, 2) == 1, do: IO.binread(io, 1)
-        chunks(io, 96_000)
-
-      _ ->
-        {:error, :invalid_audio}
-    end
-  end
-
-  defp unwrap({:ok, result}), do: result
-  defp unwrap(error), do: error
-
-  defp with_segment(path, start, stop, operation) do
-    work = Path.join(Storage.directory(), ".trim-#{id()}")
+  defp in_work(operation) do
+    work = Path.join(Storage.directory(), ".edit-#{id()}")
 
     with :ok <- File.mkdir(work), :ok <- File.chmod(work, 0o700) do
-      segment = Path.join(work, "segment.wav")
-
       try do
-        with :ok <- copy_segment(path, segment, start, stop), do: operation.(segment)
+        operation.(work)
       after
         File.rm_rf(work)
       end
     end
   end
 
-  defp copy_segment(path, output, start, stop) do
-    with {:ok, info} <- format(path) do
-      first = trunc(start * 48_000) * 2
-      size = min(trunc(stop * 48_000) * 2, info.size) - first
+  @previews 20
 
-      header =
-        <<"RIFF", size + 36::little-32, "WAVEfmt ", 16::little-32, 1::little-16, 1::little-16,
-          48_000::little-32, 96_000::little-32, 2::little-16, 16::little-16, "data",
-          size::little-32>>
-
-      File.open(path, [:read, :binary], fn source ->
-        write_segment(source, output, header, info.offset + first, size)
-      end)
-      |> unwrap()
+  @doc """
+  A WAV of the moment with only the chosen speakers, for listening before saving.
+  Mixes are cached per revision and selection; only the latest few are kept.
+  """
+  def preview(name, ids) do
+    with {:ok, moment} <- get(name),
+         {:ok, path} <- Storage.download_path(name),
+         {:ok, chosen} <- chosen_speakers(moment, ids) do
+      if chosen == [] or chosen == active_speakers(moment),
+        do: {:ok, path},
+        else: cached_mix(moment, chosen)
     end
   end
 
-  defp write_segment(source, output, header, offset, size) do
-    File.open(output, [:write, :binary, :exclusive], fn target ->
-      :ok = File.chmod(output, 0o600)
-      :ok = IO.binwrite(target, header)
-      {:ok, _} = :file.position(source, offset)
-      copy_bytes(source, target, size)
+  defp cached_mix(moment, chosen) do
+    folder = Path.join(Storage.directory(), ".previews")
+    key = :crypto.hash(:sha256, Enum.join([moment.name, moment.revision | chosen], "\n"))
+    output = Path.join(folder, "#{Base.encode16(key, case: :lower) |> String.slice(0, 32)}.wav")
+
+    with :ok <- File.mkdir_p(folder), :ok <- File.chmod(folder, 0o700) do
+      case File.lstat(output) do
+        {:ok, %{type: :regular}} ->
+          {:ok, output}
+
+        _ ->
+          temp = Path.join(folder, ".#{id()}.wav")
+
+          try do
+            with :ok <- Storage.mix(Enum.map(chosen, &stem(moment.name, &1)), temp),
+                 :ok <- File.chmod(temp, 0o600),
+                 :ok <- File.rename(temp, output) do
+              prune_previews(folder)
+              {:ok, output}
+            end
+          after
+            File.rm(temp)
+          end
+      end
+    end
+  end
+
+  defp prune_previews(folder) do
+    folder
+    |> File.ls!()
+    |> Enum.map(&Path.join(folder, &1))
+    |> Enum.sort_by(&File.stat!(&1, time: :posix).mtime, :desc)
+    |> Enum.drop(@previews)
+    |> Enum.each(&File.rm/1)
+  rescue
+    _ -> :ok
+  end
+
+  @doc """
+  Loudness envelopes for a moment: one per speaker stem, or a single `"all"` one for
+  recordings without stems. Feed them to `highlights/3` and `speech_bounds/3`.
+  """
+  def analyze(name) do
+    with {:ok, moment} <- get(name), {:ok, path} <- Storage.download_path(name) do
+      sources =
+        if moment.speakers == [],
+          do: [{"all", path}],
+          else: Enum.map(moment.speakers, &{&1.id, stem(name, &1.id)})
+
+      with {:ok, envelopes} <- read_envelopes(sources) do
+        {:ok,
+         %{name: name, revision: moment.revision, duration: moment.duration, envelopes: envelopes}}
+      end
+    end
+  end
+
+  defp read_envelopes(sources) do
+    Enum.reduce_while(sources, {:ok, %{}}, fn {id, source}, {:ok, envelopes} ->
+      case Wav.read(source) do
+        {:ok, pcm} -> {:cont, {:ok, Map.put(envelopes, id, Analysis.envelope(pcm))}}
+        error -> {:halt, error}
+      end
     end)
-    |> unwrap()
   end
 
-  defp copy_bytes(_, _, 0), do: :ok
+  def highlights(analysis, chosen),
+    do: Analysis.highlights(envelopes(analysis, chosen), analysis.duration)
 
-  defp copy_bytes(source, target, remaining) do
-    count = min(remaining, 65_536)
+  def speech_bounds(analysis, chosen),
+    do:
+      analysis
+      |> envelopes(chosen)
+      |> Analysis.combine()
+      |> Analysis.speech_bounds(analysis.duration)
 
-    case IO.binread(source, count) do
-      data when is_binary(data) and byte_size(data) == count ->
-        with :ok <- IO.binwrite(target, data), do: copy_bytes(source, target, remaining - count)
+  defp envelopes(%{envelopes: %{"all" => env}}, _), do: [env]
 
-      _ ->
-        {:error, :invalid_audio}
-    end
-  end
+  defp envelopes(%{envelopes: envelopes}, chosen),
+    do: for(id <- chosen, Map.has_key?(envelopes, id), do: envelopes[id])
 
   defp metadata(path) do
     with {:ok, %{type: :regular, size: size}} <- File.lstat(path <> ".json"),
-         true <- size < 4096,
+         true <- size < 16_384,
          {:ok, data} <- File.read(path <> ".json"),
          {:ok, result} when is_map(result) <- Jason.decode(data),
          do: result,
          else: (_ -> %{})
   end
 
-  defp write_metadata(path, title, tags) do
+  defp write_metadata(path, changes) do
     temp = path <> ".#{id()}.json"
-    data = Jason.encode!(%{title: title, tags: tags, revision: id()})
+
+    data =
+      path
+      |> metadata()
+      |> Map.merge(changes)
+      |> Map.put("revision", id())
+      |> Jason.encode!()
 
     try do
       with :ok <- File.write(temp, data, [:exclusive]),

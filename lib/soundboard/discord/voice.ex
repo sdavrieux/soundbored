@@ -27,12 +27,13 @@ defmodule Soundboard.Discord.Voice do
         frames =
           LiveStream.frames(
             input,
-            Keyword.get(opts, :clip_volume, Keyword.get(opts, :volume, 1.0))
+            Keyword.get(opts, :clip_volume, Keyword.get(opts, :volume, 1.0)),
+            Keyword.get(opts, :effect)
           )
 
         {frames, :raw, []}
       else
-        {input, type, Keyword.delete(opts, :clip_volume)}
+        {input, type, Keyword.drop(opts, [:clip_volume, :effect])}
       end
 
     case play_with_supported_arity(guild_id, input, type, opts) do

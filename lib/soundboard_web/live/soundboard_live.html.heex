@@ -105,6 +105,20 @@
         <.icon name="hero-x-mark" class="w-4 h-4" /> Clear
       </button>
     </div>
+    <div id="fx-chips" class="chip-row fx-row" aria-label="Play with an effect">
+      <span class="fx-label">FX</span>
+      <button
+        :for={effect <- Effects.all()}
+        id={"fx-#{effect.id}"}
+        phx-click="toggle_effect"
+        phx-value-effect={effect.id}
+        aria-pressed={to_string(@effect == effect.id)}
+        class={["chip chip-fx", @effect == effect.id && "is-active"]}
+        title={"Play sounds in Discord with the #{effect.label} effect"}
+      >
+        <span aria-hidden="true">{effect.icon}</span> {effect.label}
+      </button>
+    </div>
   </div>
 
   <%= if @selecting do %>

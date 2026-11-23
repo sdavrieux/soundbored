@@ -49,6 +49,13 @@ defmodule Soundboard.AudioPlayer do
     GenServer.cast(__MODULE__, {:play_sound, sound_name, actor})
   end
 
+  @doc "Plays a sound through one of `Soundboard.AudioPlayer.Effects`."
+  def play_sound(sound_name, actor, nil), do: play_sound(sound_name, actor)
+
+  def play_sound(sound_name, actor, effect) do
+    GenServer.cast(__MODULE__, {:play_sound, sound_name, actor, effect})
+  end
+
   def stop_sound do
     GenServer.cast(__MODULE__, :stop_sound)
   end
@@ -136,7 +143,10 @@ defmodule Soundboard.AudioPlayer do
     {:noreply, PlaybackQueue.handle_playback_finished(state, guild_id)}
   end
 
-  def handle_cast({:play_sound, sound_name, actor}, %{voice_channel: nil} = state) do
+  def handle_cast({:play_sound, sound_name, actor}, state),
+    do: handle_cast({:play_sound, sound_name, actor, nil}, state)
+
+  def handle_cast({:play_sound, sound_name, actor, effect}, %{voice_channel: nil} = state) do
     if AutoJoinPolicy.mode() == :play do
       case try_auto_join(actor) do
         {:ok, {guild_id, channel_id}} ->
@@ -145,7 +155,7 @@ defmodule Soundboard.AudioPlayer do
             |> Map.put(:voice_channel, {guild_id, channel_id})
             |> schedule_idle_timeout()
 
-          do_play_sound(sound_name, actor, new_state)
+          do_play_sound(sound_name, actor, effect, new_state)
 
         :not_found ->
           Notifier.error("Bot is not connected to a voice channel. Use !join in Discord first.")
@@ -157,8 +167,8 @@ defmodule Soundboard.AudioPlayer do
     end
   end
 
-  def handle_cast({:play_sound, sound_name, actor}, state) do
-    do_play_sound(sound_name, actor, state)
+  def handle_cast({:play_sound, sound_name, actor, effect}, state) do
+    do_play_sound(sound_name, actor, effect, state)
   end
 
   def handle_cast({:last_user_left, guild_id}, %{voice_channel: {guild_id, _}} = state) do
@@ -249,9 +259,11 @@ defmodule Soundboard.AudioPlayer do
   @impl true
   def handle_info(_, state), do: {:noreply, state}
 
-  defp do_play_sound(sound_name, actor, %{voice_channel: voice_channel} = state) do
+  defp do_play_sound(sound_name, actor, effect, %{voice_channel: voice_channel} = state) do
     case PlaybackQueue.build_request(voice_channel, sound_name, actor) do
       {:ok, request} ->
+        request = Map.put(request, :effect, effect)
+
         new_state =
           if AutoJoinPolicy.mode() == :play, do: reset_idle_timeout(state), else: state
 

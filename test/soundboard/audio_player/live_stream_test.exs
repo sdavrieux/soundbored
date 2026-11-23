@@ -58,6 +58,36 @@ defmodule Soundboard.AudioPlayer.LiveStreamTest do
     assert quiet / loud < 0.24
   end
 
+  test "effects re-time audio in the decoder and still pace it for Discord" do
+    dir =
+      Path.join(System.tmp_dir!(), "soundboard-fx-test-#{System.unique_integer([:positive])}")
+
+    File.mkdir!(dir)
+    on_exit(fn -> File.rm_rf!(dir) end)
+    source = Path.join(dir, "tone.wav")
+
+    assert {_, 0} =
+             System.cmd(System.find_executable("ffmpeg"), [
+               "-v",
+               "error",
+               "-f",
+               "lavfi",
+               "-i",
+               "sine=frequency=440:duration=2:sample_rate=44100",
+               source
+             ])
+
+    started = System.monotonic_time(:millisecond)
+    frames = source |> LiveStream.frames(1.0, "fast") |> Enum.to_list()
+    elapsed = System.monotonic_time(:millisecond) - started
+
+    # 2 s at 1.6x speed is 1.25 s, or about 62 frames of 20 ms, delivered in real time.
+    assert length(frames) in 60..65
+    assert elapsed > 900
+    reversed = source |> LiveStream.frames(1.0, "reverse") |> Enum.count()
+    assert reversed in 99..102
+  end
+
   test "owner death tears down the encoder and its private FIFO" do
     source =
       Path.join(

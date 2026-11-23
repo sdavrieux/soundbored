@@ -37,7 +37,7 @@ defmodule Soundboard.Capture.StorageTest do
     assert {:error, :not_found} = Storage.download_path(name)
   end
 
-  test "FFmpeg exports mixed speakers with silence between turns and fixed duration", %{dir: dir} do
+  test "FFmpeg exports trimmed mixes plus a stem per speaker", %{dir: dir} do
     ffmpeg = System.find_executable("ffmpeg")
     assert ffmpeg, "Install FFmpeg to run recording integration tests"
     tone = Path.join(dir, "tone.ogg")
@@ -62,36 +62,34 @@ defmodule Soundboard.Capture.StorageTest do
 
     frames =
       for {packet, index} <- Enum.with_index(packets),
-          {speaker, offset} <- [{"first", 200}, {"second", 1200}] do
+          {speaker, offset} <- [{"first", 1000}, {"second", 2000}] do
         {offset + index * 20, speaker, packet}
       end
 
-    assert {:ok, name} = Storage.save(%{frames: frames, start: 0, stop: 2000})
+    assert {:ok, name} = Storage.save(%{frames: frames, start: 0, stop: 4000})
     assert Storage.list() == [name]
     assert {:ok, path} = Storage.download_path(name)
     assert {:ok, %{mode: mode}} = File.stat(path)
     assert Bitwise.band(mode, 0o777) == 0o600
 
-    assert {pcm, 0} =
-             System.cmd(ffmpeg, [
-               "-v",
-               "error",
-               "-i",
-               path,
-               "-f",
-               "s16le",
-               "-ac",
-               "1",
-               "-ar",
-               "48000",
-               "pipe:1"
-             ])
+    pcm = decode(ffmpeg, path)
 
-    assert byte_size(pcm) == 2 * 48_000 * 2
-    assert rms(pcm, 250) > 100
-    assert rms(pcm, 1250) > 100
+    # Dead air is cut: speech starts 0.25 s in and the clip ends 0.5 s after it.
+    assert_in_delta byte_size(pcm) / 96_000, 1.95, 0.06
+    assert rms(pcm, 150) < 5
+    assert rms(pcm, 300) > 100
     assert rms(pcm, 800) < 5
+    assert rms(pcm, 1300) > 100
     assert rms(pcm, 1800) < 5
+
+    # Each speaker also gets a stem, trimmed the same way.
+    stems = Storage.stems_path(name)
+    assert Enum.sort(File.ls!(stems)) == ["1.wav", "2.wav"]
+    first = decode(ffmpeg, Path.join(stems, "1.wav"))
+    second = decode(ffmpeg, Path.join(stems, "2.wav"))
+    assert byte_size(first) == byte_size(pcm) and byte_size(second) == byte_size(pcm)
+    assert rms(first, 300) > 100 and rms(first, 1300) < 5
+    assert rms(second, 300) < 5 and rms(second, 1300) > 100
     refute Enum.any?(File.ls!(dir), &String.starts_with?(&1, ".export-"))
   end
 
@@ -120,6 +118,25 @@ defmodule Soundboard.Capture.StorageTest do
       end)
 
     Enum.reverse(packets) ++ ogg_packets(tail)
+  end
+
+  defp decode(ffmpeg, path) do
+    {pcm, 0} =
+      System.cmd(ffmpeg, [
+        "-v",
+        "error",
+        "-i",
+        path,
+        "-f",
+        "s16le",
+        "-ac",
+        "1",
+        "-ar",
+        "48000",
+        "pipe:1"
+      ])
+
+    pcm
   end
 
   defp rms(pcm, milliseconds) do

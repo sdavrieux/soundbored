@@ -1,7 +1,7 @@
 defmodule Soundboard.Capture.MomentsTest do
   use Soundboard.DataCase, async: false
   alias Soundboard.{Accounts.User, MomentFixtures, Repo}
-  alias Soundboard.Capture.{Moments, Storage}
+  alias Soundboard.Capture.{Moments, Storage, Wav}
 
   setup do
     dir =
@@ -112,11 +112,75 @@ defmodule Soundboard.Capture.MomentsTest do
     assert Enum.sort(tags) == ["funny", "moments", "sam"]
   end
 
+  test "speakers can be left out; stems follow trims and are removed with the moment", %{
+    dir: dir
+  } do
+    name = MomentFixtures.create_with_stems(dir)
+    stems = Storage.stems_path(name)
+
+    assert {:ok, moment} = Moments.get(name)
+    assert moment.speakers == [%{id: "1", name: "Ana"}, %{id: "2", name: "Ben"}]
+    assert moment.muted == []
+    assert Moments.active_speakers(moment) == ["1", "2"]
+
+    attrs = %{"start" => "0", "stop" => "2", "speakers" => ["1"]}
+    assert {:ok, ana_only} = Moments.save(name, moment.revision, attrs)
+    assert ana_only.muted == ["2"]
+    pcm = pcm(Path.join(dir, name))
+    assert rms(pcm, 0.5) > 1000
+    assert rms(pcm, 1.5) < 5
+
+    assert {:error, :no_speakers} =
+             Moments.save(name, ana_only.revision, %{attrs | "speakers" => []})
+
+    # Bringing Ben back remixes from the stems, and the trim applies to every stem.
+    attrs = %{"start" => "0.5", "stop" => "1.5", "speakers" => ["1", "2"]}
+    assert {:ok, both} = Moments.save(name, ana_only.revision, attrs)
+    assert both.muted == []
+    assert both.duration == 1.0
+    pcm = pcm(Path.join(dir, name))
+    assert rms(pcm, 0.25) > 1000
+    assert rms(pcm, 0.75) > 1000
+    assert byte_size(pcm(Path.join(stems, "1.wav"))) == byte_size(pcm)
+    assert byte_size(pcm(Path.join(stems, "2.wav"))) == byte_size(pcm)
+
+    assert {:ok, analysis} = Moments.analyze(name)
+    assert Map.keys(analysis.envelopes) == ["1", "2"]
+    assert Moments.speech_bounds(analysis, ["2"]) == {0.25, 1.0}
+
+    assert {:ok, main} = Moments.preview(name, ["1", "2"])
+    assert main == Path.join(dir, name)
+    assert {:ok, ben} = Moments.preview(name, ["2"])
+    assert Path.dirname(ben) == Path.join(dir, ".previews")
+    assert rms(pcm(ben), 0.25) < 5
+    assert rms(pcm(ben), 0.75) > 1000
+    assert {:ok, ^ben} = Moments.preview(name, ["2"])
+
+    assert :ok = Moments.delete(name, both.revision)
+    refute File.exists?(stems)
+  end
+
+  test "moments without stems have no speaker picker" do
+    assert [%{speakers: [], muted: []} = moment] = Moments.list()
+    assert {:ok, %{envelopes: %{"all" => _}}} = Moments.analyze(moment.name)
+  end
+
   test "clean_tags caps count and length" do
     tags = Moments.clean_tags(Enum.map(1..20, &"tag#{&1}") ++ [String.duplicate("x", 50)])
     assert length(tags) == 12
     assert Moments.clean_tags(String.duplicate("y", 50)) == [String.duplicate("y", 30)]
     assert Moments.clean_tags(nil) == []
+  end
+
+  defp pcm(path) do
+    {:ok, pcm} = Wav.read(path)
+    pcm
+  end
+
+  defp rms(pcm, seconds) do
+    chunk = binary_part(pcm, trunc(seconds * 48_000) * 2, 4800)
+    samples = for <<sample::little-signed-16 <- chunk>>, do: sample * sample
+    :math.sqrt(Enum.sum(samples) / length(samples))
   end
 
   defp restore(key, nil), do: Application.delete_env(:soundboard, key)

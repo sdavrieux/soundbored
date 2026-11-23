@@ -246,6 +246,8 @@ Hooks.MomentEditor = {
     }
     this.onTime = () => { if (this.previewEnd != null && this.audio.currentTime >= this.previewEnd) { this.audio.pause(); this.previewEnd = null } }
     this.onPause = () => { this.previewEnd = null }
+    // Auto-trim and highlight chips move the range on the server, then ask to hear it.
+    this.handleEvent("moment-preview", () => this.onPreview())
     this.preview = this.el.querySelector("[data-preview]")
     this.preview.addEventListener("click", this.onPreview)
     this.audio.addEventListener("play", this.onPlay)

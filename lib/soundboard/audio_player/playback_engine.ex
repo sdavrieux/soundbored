@@ -17,10 +17,10 @@ defmodule Soundboard.AudioPlayer.PlaybackEngine do
   @rejoin_retry_threshold 3
   @max_play_attempts 20
 
-  def play(guild_id, channel_id, sound_name, path_or_url, volume, actor) do
+  def play(guild_id, channel_id, sound_name, path_or_url, volume, actor, effect \\ nil) do
     join_state = ensure_joined_channel(guild_id, channel_id)
     maybe_settle_before_play(join_state)
-    submit_play_request(guild_id, sound_name, path_or_url, volume, actor)
+    submit_play_request(guild_id, sound_name, path_or_url, volume, actor, effect)
   end
 
   defp maybe_settle_before_play({:joined, :ok}) do
@@ -29,7 +29,7 @@ defmodule Soundboard.AudioPlayer.PlaybackEngine do
 
   defp maybe_settle_before_play(_), do: :ok
 
-  defp submit_play_request(guild_id, sound_name, path_or_url, volume, actor) do
+  defp submit_play_request(guild_id, sound_name, path_or_url, volume, actor, effect) do
     if is_nil(ffmpeg_executable()) do
       Logger.error("ffmpeg not found in PATH. Cannot play #{sound_name}")
       broadcast_error("ffmpeg is not installed on this host")
@@ -41,10 +41,11 @@ defmodule Soundboard.AudioPlayer.PlaybackEngine do
         guild_id: guild_id,
         play_input: play_input,
         play_type: play_type,
-        play_options: [
-          volume: Soundboard.MasterVolume.apply(clamp_volume(volume)),
-          clip_volume: clamp_volume(volume)
-        ],
+        play_options:
+          [
+            volume: Soundboard.MasterVolume.apply(clamp_volume(volume)),
+            clip_volume: clamp_volume(volume)
+          ] ++ if(effect, do: [effect: effect], else: []),
         sound_name: sound_name,
         actor: actor
       }

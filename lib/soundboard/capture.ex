@@ -6,6 +6,7 @@ defmodule Soundboard.Capture do
   """
   use GenServer
   import Ecto.Query, only: [from: 2]
+  alias EDA.Cache.Member
   alias Soundboard.Accounts.User
   alias Soundboard.Capture.{Buffer, Moments, Storage}
   alias Soundboard.Discord.{Handler, Voice}
@@ -51,6 +52,7 @@ defmodule Soundboard.Capture do
   @impl true
   def init(_) do
     Process.send_after(self(), :tick, 1000)
+
     {:ok,
      %{target: nil, started_at: nil, buffer: %Buffer{}, export: nil, export_name: nil, label: nil}}
   end
@@ -90,13 +92,11 @@ defmodule Soundboard.Capture do
     case Buffer.snapshot(state.buffer, now(), state.started_at) do
       {:ok, snapshot} ->
         name = Storage.new_name()
+        {guild, _} = state.target
 
         task =
           Task.Supervisor.async_nolink(Soundboard.Capture.Tasks, fn ->
-            with {:ok, ^name} <- Storage.save(snapshot, name) do
-              Moments.label(name, %{"tags" => speaker_tags(snapshot.frames)})
-              {:ok, name}
-            end
+            export(snapshot, name, guild)
           end)
 
         state = %{state | export: task.ref, export_name: name, label: nil}
@@ -198,6 +198,48 @@ defmodule Soundboard.Capture do
     Soundboard.Repo.all(from u in User, where: u.discord_id in ^ids, select: u.username)
   rescue
     _ -> []
+  end
+
+  defp export(snapshot, name, guild) do
+    with {:ok, ^name} <- Storage.save(snapshot, name) do
+      Moments.label(name, %{
+        "tags" => speaker_tags(snapshot.frames),
+        "speakers" => speaker_names(guild, Buffer.speakers(snapshot.frames))
+      })
+
+      {:ok, name}
+    end
+  end
+
+  # Names for the speaker picker, in stem order. Discord's cache knows everyone in
+  # the channel; signed-in usernames are the fallback.
+  defp speaker_names(guild, ids) do
+    users =
+      try do
+        Map.new(
+          Soundboard.Repo.all(
+            from u in User, where: u.discord_id in ^ids, select: {u.discord_id, u.username}
+          )
+        )
+      rescue
+        _ -> %{}
+      end
+
+    Enum.map(ids, &(discord_name(guild, &1) || users[&1]))
+  end
+
+  defp discord_name(guild, id) do
+    member = Member.get(guild, id) || %{}
+    user = member["user"] || EDA.Cache.get_user(id) || %{}
+
+    Enum.find(
+      [member["nick"], user["global_name"], user["username"]],
+      &(is_binary(&1) and &1 != "")
+    )
+  rescue
+    _ -> nil
+  catch
+    _, _ -> nil
   end
 
   defp broadcast(state), do: PubSubTopics.broadcast_desk({:capture_status, public_status(state)})

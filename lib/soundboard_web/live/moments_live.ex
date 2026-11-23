@@ -13,6 +13,8 @@ defmodule SoundboardWeb.MomentsLive do
      |> assign(:current_path, "/moments")
      |> assign(:moments, Moments.list())
      |> assign(:selected, nil)
+     |> assign(:analysis, nil)
+     |> assign(:highlights, [])
      |> assign(:query, "")
      |> assign(:tag_filter, [])
      |> assign(:busy, false)}
@@ -41,8 +43,39 @@ defmodule SoundboardWeb.MomentsLive do
     end
   end
 
-  def handle_event("edit_selection", %{"moment" => attrs}, socket),
-    do: {:noreply, assign(socket, :selection, attrs)}
+  def handle_event("edit_selection", %{"moment" => attrs}, socket) do
+    speakers =
+      case attrs["speakers"] do
+        nil -> socket.assigns.selection["speakers"]
+        ids -> Enum.reject(List.wrap(ids), &(&1 == ""))
+      end
+
+    attrs = Map.put(attrs, "speakers", speakers)
+
+    {:noreply, socket |> assign(:selection, attrs) |> refresh_highlights()}
+  end
+
+  def handle_event("auto_trim", _, %{assigns: %{analysis: nil}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event("auto_trim", _, socket) do
+    case Moments.speech_bounds(socket.assigns.analysis, chosen(socket.assigns)) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Nobody speaks in this selection.")}
+
+      {start, stop} ->
+        {:noreply, socket |> set_range(start, stop) |> push_event("moment-preview", %{})}
+    end
+  end
+
+  def handle_event("jump_highlight", %{"index" => index}, socket) do
+    with {index, ""} <- Integer.parse(index),
+         %{start: start, stop: stop} <- Enum.at(socket.assigns.highlights, index) do
+      {:noreply, socket |> set_range(start, stop) |> push_event("moment-preview", %{})}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
 
   def handle_event("save_changes", %{"moment" => attrs}, socket),
     do: operate(socket, :save, attrs)
@@ -91,27 +124,8 @@ defmodule SoundboardWeb.MomentsLive do
       {:delete, :ok} ->
         {:noreply, socket |> assign(:selected, nil) |> put_flash(:info, "Moment deleted")}
 
-      {_, {:error, :stale}} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "This moment changed in another session. Select it again before editing."
-         )}
-
-      {_, {:error, :untitled}} ->
-        {:noreply, put_flash(socket, :error, "Name the moment before publishing it.")}
-
-      {_, {:error, :invalid_selection}} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "Enter a name and choose at least 0.05 seconds within this recording."
-         )}
-
       {_, {:error, error}} ->
-        {:noreply, put_flash(socket, :error, Sounds.create_error_message(error))}
+        {:noreply, put_flash(socket, :error, error_message(error))}
 
       _ ->
         {:noreply, put_flash(socket, :error, "Could not update this moment")}
@@ -123,20 +137,89 @@ defmodule SoundboardWeb.MomentsLive do
       {:noreply,
        socket |> assign(:busy, false) |> put_flash(:error, "Could not update this moment")}
 
+  def handle_async(:analyze, {:ok, {:ok, analysis}}, socket) do
+    case socket.assigns.selected do
+      %{name: name, revision: revision}
+      when name == analysis.name and revision == analysis.revision ->
+        {:noreply, socket |> assign(:analysis, analysis) |> refresh_highlights()}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_async(:analyze, _, socket), do: {:noreply, socket}
+
+  defp error_message(:stale),
+    do: "This moment changed in another session. Select it again before editing."
+
+  defp error_message(:no_speakers), do: "Keep at least one speaker in the mix."
+  defp error_message(:untitled), do: "Name the moment before publishing it."
+
+  defp error_message(:invalid_selection),
+    do: "Enter a name and choose at least 0.05 seconds within this recording."
+
+  defp error_message(error), do: Sounds.create_error_message(error)
+
   @impl true
   def handle_info(:reload_moments, socket),
     do: {:noreply, assign(socket, :moments, Moments.list())}
 
-  defp select(socket, moment),
+  defp select(socket, moment) do
+    socket
+    |> assign(:selected, moment)
+    |> assign(:analysis, nil)
+    |> assign(:highlights, [])
+    |> assign(:selection, %{
+      "title" => if(moment.titled, do: moment.title, else: ""),
+      "tags" => Enum.join(moment.tags, ", "),
+      "start" => "0",
+      "stop" => to_string(moment.duration),
+      "speakers" => Moments.active_speakers(moment)
+    })
+    |> start_async(:analyze, fn -> Moments.analyze(moment.name) end)
+  end
+
+  defp set_range(socket, start, stop) do
+    selection =
+      socket.assigns.selection
+      |> Map.put("start", to_string(start))
+      |> Map.put("stop", to_string(stop))
+
+    assign(socket, :selection, selection)
+  end
+
+  defp chosen(%{selected: %{speakers: []}}), do: []
+  defp chosen(%{selection: selection}), do: selection["speakers"] || []
+
+  defp refresh_highlights(%{assigns: %{analysis: nil}} = socket), do: socket
+
+  defp refresh_highlights(socket),
     do:
-      socket
-      |> assign(:selected, moment)
-      |> assign(:selection, %{
-        "title" => if(moment.titled, do: moment.title, else: ""),
-        "tags" => Enum.join(moment.tags, ", "),
-        "start" => "0",
-        "stop" => to_string(moment.duration)
-      })
+      assign(
+        socket,
+        :highlights,
+        Moments.highlights(socket.assigns.analysis, chosen(socket.assigns))
+      )
+
+  # Listening to a different speaker mix than the saved one needs a server-side remix.
+  defp audio_src(moment, selection) do
+    base = "/moments/#{moment.name}/audio?v=#{URI.encode(moment.revision)}"
+    speakers = selection["speakers"] || []
+
+    if moment.speakers == [] or speakers == [] or speakers == Moments.active_speakers(moment),
+      do: base,
+      else: base <> "&speakers=" <> Enum.join(speakers, ",")
+  end
+
+  defp highlight_label(highlight) do
+    [
+      highlight.loud && "Loud",
+      highlight.voices > 1 && "#{highlight.voices} talking"
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join(" · ")
+  end
 
   @doc "Moments carrying every chosen tag whose name or tags contain the query."
   def visible(moments, query, tags) do
@@ -252,15 +335,14 @@ defmodule SoundboardWeb.MomentsLive do
               <.moment_title id="editor" moment={@selected} />
             </h2>
             <p class="mt-1 mb-4 text-sm text-gray-500 dark:text-gray-400">
-              <.local_time id="editor-meta" at={@selected.recorded_at} /> · {format_duration(
-                @selected.duration
-              )}
+              <.local_time id="editor-meta" at={@selected.recorded_at} />
+              · {format_duration(@selected.duration)}
             </p>
             <audio
               controls
               preload="metadata"
               class="w-full"
-              src={"/moments/#{@selected.name}/audio?v=#{URI.encode(@selected.revision)}"}
+              src={audio_src(@selected, @selection)}
               aria-label="Play saved moment"
             />
             <form
@@ -293,11 +375,56 @@ defmodule SoundboardWeb.MomentsLive do
                   Separate with commas. Published sounds get these tags too.
                 </span>
               </label>
+              <fieldset :if={@selected.speakers != []} class="trim-box" id="moment-speakers">
+                <legend class="font-medium">Speakers</legend>
+                <input type="hidden" name="moment[speakers][]" value="" />
+                <div class="chip-row">
+                  <label
+                    :for={speaker <- @selected.speakers}
+                    class={["chip", speaker.id in (@selection["speakers"] || []) && "is-active"]}
+                  >
+                    <input
+                      type="checkbox"
+                      name="moment[speakers][]"
+                      value={speaker.id}
+                      checked={speaker.id in (@selection["speakers"] || [])}
+                      class="sr-only"
+                      disabled={@busy}
+                    />
+                    {speaker.name}
+                  </label>
+                </div>
+                <p :if={(@selection["speakers"] || []) == []} class="field-hint text-red-600">
+                  Keep at least one speaker.
+                </p>
+                <p :if={(@selection["speakers"] || []) != []} class="field-hint">
+                  Tap a name to leave them out. The player above plays the new mix.
+                </p>
+              </fieldset>
               <fieldset class="trim-box">
                 <legend class="font-medium">Trim</legend>
-                <div :for={
-                  {bound, label, min} <- [{"start", "Start", "0"}, {"stop", "End", "0.05"}]
-                } class="trim-row">
+                <div class="highlight-row" aria-label="Highlights">
+                  <span :if={@analysis == nil} class="field-hint">Finding highlights…</span>
+                  <span :if={@analysis != nil and @highlights == []} class="field-hint">
+                    No standout moments found.
+                  </span>
+                  <button
+                    :for={{highlight, index} <- Enum.with_index(@highlights)}
+                    type="button"
+                    phx-click="jump_highlight"
+                    phx-value-index={index}
+                    class="chip chip-highlight"
+                    disabled={@busy}
+                    title="Select and play this highlight"
+                  >
+                    🔥 {format_clock(highlight.at)}
+                    <span class="chip-count">{highlight_label(highlight)}</span>
+                  </button>
+                </div>
+                <div
+                  :for={{bound, label, min} <- [{"start", "Start", "0"}, {"stop", "End", "0.05"}]}
+                  class="trim-row"
+                >
                   <label for={"trim-#{bound}"} class="trim-label">{label}</label>
                   <input
                     data-range={bound}
@@ -334,6 +461,15 @@ defmodule SoundboardWeb.MomentsLive do
                 >
                   <.icon name="hero-play" class="w-5 h-5" /> Preview selection
                 </button>
+                <button
+                  type="button"
+                  phx-click="auto_trim"
+                  class="studio-button btn-secondary w-full sm:w-auto"
+                  disabled={@busy or @analysis == nil}
+                  title="Cut the silence before the first and after the last word"
+                >
+                  <.icon name="hero-scissors" class="w-5 h-5" /> Auto-trim
+                </button>
               </fieldset>
               <div class="flex flex-col sm:flex-row gap-3">
                 <button
@@ -345,11 +481,11 @@ defmodule SoundboardWeb.MomentsLive do
                   <.icon name="hero-arrow-up-tray" class="w-5 h-5" /> Publish to Sounds
                 </button>
                 <button type="submit" class="studio-button btn-secondary" disabled={@busy}>
-                  Save name, tags and trim
+                  Save changes
                 </button>
               </div>
               <p class="field-hint">
-                Saving a trim replaces this private recording. Publishing makes a copy in Sounds
+                Saving a trim or speaker change replaces this private recording. Publishing makes a copy in Sounds
                 and leaves the recording as it is.
               </p>
             </form>
@@ -398,8 +534,15 @@ defmodule SoundboardWeb.MomentsLive do
       id={"time-#{@id}"}
       datetime={@at}
       phx-hook="LocalTime"
-    >{String.replace(String.slice(@at, 0, 16), "T", " ") <> " UTC"}</time>
+    >
+      {String.replace(String.slice(@at, 0, 16), "T", " ") <> " UTC"}
+    </time>
     """
+  end
+
+  defp format_clock(seconds) do
+    total = trunc(seconds)
+    "#{div(total, 60)}:#{total |> rem(60) |> Integer.to_string() |> String.pad_leading(2, "0")}"
   end
 
   defp format_duration(seconds) when seconds < 60, do: "#{Float.round(seconds * 1.0, 1)} s"

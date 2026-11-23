@@ -154,14 +154,20 @@ defmodule Soundboard.AudioPlayer.PlaybackQueue do
   defp start_playback(state, request) do
     task =
       Task.async(fn ->
-        PlaybackEngine.play(
+        args = [
           request.guild_id,
           request.channel_id,
           request.sound_name,
           request.path_or_url,
           request.volume,
           request.actor
-        )
+        ]
+
+        # Plain plays keep the six-argument call; only effects add the seventh.
+        case Map.get(request, :effect) do
+          nil -> apply(PlaybackEngine, :play, args)
+          effect -> apply(PlaybackEngine, :play, args ++ [effect])
+        end
       end)
 
     %{

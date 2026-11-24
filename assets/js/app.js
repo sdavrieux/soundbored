@@ -249,6 +249,17 @@ const formatCutTime = (seconds) => {
   return `${minutes}:${(seconds - minutes * 60).toFixed(2).padStart(5, "0")}`
 }
 const round2 = (value) => Math.round(value * 100) / 100
+// One context for every editor: a fresh one per moment (e.g. after saving) makes
+// iPad and Bluetooth output swallow the first part of the next playback.
+let editorContext = null
+const getEditorContext = () => {
+  if (editorContext && editorContext.state !== "closed") return editorContext
+  const Ctor = getAudioContextCtor()
+  editorContext = Ctor ? new Ctor() : null
+  return editorContext
+}
+// What you hear trails the context clock by the output latency (large on Bluetooth).
+const heardDelay = (context) => (context.outputLatency || 0) + (context.baseLatency || 0)
 
 Hooks.MomentEditor = {
   mounted() {
@@ -264,8 +275,7 @@ Hooks.MomentEditor = {
       start: this.wave.querySelector('[data-handle="start"]'),
       stop: this.wave.querySelector('[data-handle="stop"]')
     }
-    const Ctor = getAudioContextCtor()
-    this.context = Ctor ? new Ctor() : null
+    this.context = getEditorContext()
     // iOS 17+: play through the silent switch like a media app.
     try { if (navigator.audioSession) navigator.audioSession.type = "playback" } catch (_) {}
 
@@ -305,7 +315,6 @@ Hooks.MomentEditor = {
     this.stopPlayback()
     this.resizer.disconnect()
     window.removeEventListener("phx:stop-all-sounds", this.onStopAll)
-    this.context?.close()
   },
 
   readHighlights() {
@@ -451,6 +460,8 @@ Hooks.MomentEditor = {
     this.wave.setPointerCapture(event.pointerId)
     if (handle) {
       this.dragging = handle.dataset.handle
+      // Keep the grab point under the finger instead of snapping the cut to it.
+      this.grab = this.timeAt(event) - this[this.dragging]
       handle.focus({preventScroll: true})
     } else {
       // Tap anywhere else: move the playhead there and listen from it.
@@ -462,7 +473,7 @@ Hooks.MomentEditor = {
 
   pointerMove(event) {
     if (!this.dragging) return
-    this.setBound(this.dragging, this.timeAt(event))
+    this.setBound(this.dragging, this.timeAt(event) - this.grab)
   },
 
   pointerUp() {
@@ -534,7 +545,8 @@ Hooks.MomentEditor = {
     this.cutter.dataset.playing = mode
     const tick = () => {
       if (this.source !== source) return
-      this.playhead = Math.min(to, this.offset + this.context.currentTime - this.startedAt)
+      const heard = this.context.currentTime - this.startedAt - heardDelay(this.context)
+      this.playhead = clamp(this.offset + heard, this.offset, to)
       this.renderPlayhead()
       this.frame = requestAnimationFrame(tick)
     }

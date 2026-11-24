@@ -16,8 +16,8 @@ defmodule SoundboardWeb.Components.Layouts.NavbarTest do
 
     assert html =~ "SoundBored"
     assert html =~ "Sounds"
-    assert html =~ "Favorites"
-    assert html =~ "Stats"
+    refute html =~ "Favorites"
+    refute html =~ "Stats"
     assert html =~ "Saved moments"
   end
 

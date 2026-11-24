@@ -1,23 +1,18 @@
 defmodule SoundboardWeb.Components.Soundboard.SoundCard do
   @moduledoc """
   One sound as a pad: tapping the card plays it in Discord, the small buttons
-  preview it here, favorite it or edit it. Shared by Sounds and Favorites.
+  preview it here or edit it.
   """
   use SoundboardWeb, :html
 
   attr :sound, :map, required: true
-  attr :favorite, :boolean, default: false
-  attr :show_favorite, :boolean, default: true
   attr :show_edit, :boolean, default: true
   attr :selecting, :boolean, default: false
   attr :selectable, :boolean, default: false
   attr :selected, :boolean, default: false
 
   def sound_card(assigns) do
-    assigns =
-      assigns
-      |> assign(:name, display_name(assigns.sound.filename))
-      |> assign(:uploader, uploader(assigns.sound))
+    assigns = assign(assigns, :name, display_name(assigns.sound.filename))
 
     ~H"""
     <div class={[
@@ -59,12 +54,7 @@ defmodule SoundboardWeb.Components.Soundboard.SoundCard do
           >
             <.icon :if={@selected} name="hero-check" class="w-3.5 h-3.5" />
           </span>
-          <div class="min-w-0">
-            <p class="sound-pad-name">{@name}</p>
-            <p :if={@uploader} class="truncate text-xs text-gray-500 dark:text-gray-400">
-              by {@uploader}
-            </p>
-          </div>
+          <p class="sound-pad-name min-w-0">{@name}</p>
         </div>
 
         <div class="mt-auto flex justify-end gap-1 pointer-events-auto">
@@ -84,22 +74,6 @@ defmodule SoundboardWeb.Components.Soundboard.SoundCard do
             <.icon name="hero-stop-solid" class="w-5 h-5 stop-icon hidden" />
           </button>
           <button
-            :if={@show_favorite}
-            type="button"
-            phx-click="toggle_favorite"
-            phx-value-sound-id={@sound.id}
-            aria-pressed={to_string(@favorite)}
-            aria-label={
-              if @favorite,
-                do: "Remove #{@name} from favorites",
-                else: "Add #{@name} to favorites"
-            }
-            class="sound-pad-action hover:text-red-500"
-          >
-            <.icon :if={@favorite} name="hero-heart-solid" class="w-5 h-5 text-red-500" />
-            <.icon :if={!@favorite} name="hero-heart" class="w-5 h-5" />
-          </button>
-          <button
             :if={@show_edit}
             type="button"
             phx-click="edit"
@@ -114,7 +88,4 @@ defmodule SoundboardWeb.Components.Soundboard.SoundCard do
     </div>
     """
   end
-
-  defp uploader(%{user: %{username: name}}) when is_binary(name), do: name
-  defp uploader(_), do: nil
 end

@@ -60,13 +60,13 @@ defmodule SoundboardWeb.MomentsLiveTest do
     assert has_element?(view, "#moment-speakers", "Ben")
     refute has_element?(view, "[data-src*='speakers=']")
 
-    view |> form("#moment-trim") |> render_change(%{moment: %{speakers: ["", "2"]}})
+    view |> form("#moment-speakers") |> render_change(%{moment: %{speakers: ["", "2"]}})
     assert has_element?(view, "[data-src*='speakers=2']")
 
-    view |> form("#moment-trim") |> render_change(%{moment: %{speakers: [""]}})
+    view |> form("#moment-speakers") |> render_change(%{moment: %{speakers: [""]}})
     assert render(view) =~ "Keep at least one speaker."
 
-    view |> form("#moment-trim") |> render_change(%{moment: %{speakers: ["", "1"]}})
+    view |> form("#moment-speakers") |> render_change(%{moment: %{speakers: ["", "1"]}})
     view |> form("#moment-trim") |> render_submit()
     # Leaving someone out remixes the stems with FFmpeg, which takes a moment.
     assert render_async(view, 5_000) =~ "Changes saved"
@@ -79,7 +79,7 @@ defmodule SoundboardWeb.MomentsLiveTest do
     view |> element("[phx-value-name='#{name}']") |> render_click()
     render_async(view, 5_000)
 
-    view |> form("#moment-trim") |> render_change(%{moment: %{speakers: ["", "2"]}})
+    view |> form("#moment-speakers") |> render_change(%{moment: %{speakers: ["", "2"]}})
     view |> element("[phx-click=auto_trim]") |> render_click()
     assert has_element?(view, "#trim-start[value='0.75']")
     assert has_element?(view, "#trim-stop[value='2.0']")
@@ -127,6 +127,36 @@ defmodule SoundboardWeb.MomentsLiveTest do
     html = view |> element("form[phx-change=search_moments]") |> render_change(%{query: "joke"})
     assert html =~ "Sam joke"
     refute html =~ "Raid wipe"
+  end
+
+  test "tags are picked from existing ones or created", %{conn: conn, dir: dir} do
+    other = MomentFixtures.create(dir, "aaaaaaaaaaaaaaaa")
+    name = MomentFixtures.create(dir, "bbbbbbbbbbbbbbbb")
+    {:ok, _} = Moments.label(other, %{"title" => "Old", "tags" => "raid"})
+
+    Repo.insert!(%Soundboard.Tag{name: "Funny"})
+
+    {:ok, view, _} = live(conn, "/moments")
+    view |> element("[phx-value-name='#{name}']") |> render_click()
+
+    view |> element("#moment-tags button[phx-value-tag=raid]") |> render_click()
+    view |> element("#moment-tags button[phx-value-tag=funny]") |> render_click()
+    assert has_element?(view, "#moment-tags button.is-active[phx-value-tag=raid]")
+    assert has_element?(view, "#moment-tags button.is-active[phx-value-tag=funny]")
+
+    view |> form("#moment-new-tag") |> render_change(%{tag: " RAID "})
+    refute has_element?(view, "#moment-tags button.chip-clear")
+    view |> form("#moment-new-tag") |> render_change(%{tag: "Clutch"})
+    assert has_element?(view, "#moment-tags button.chip-clear", "clutch")
+    view |> form("#moment-new-tag", %{tag: "Clutch"}) |> render_submit()
+    assert has_element?(view, "#moment-tags button.is-active[phx-value-tag=clutch]")
+
+    view |> element("#moment-tags button.is-active[phx-value-tag=funny]") |> render_click()
+    refute has_element?(view, "#moment-tags button.is-active[phx-value-tag=funny]")
+
+    view |> form("#moment-trim", moment: %{title: "Tagged"}) |> render_submit()
+    assert render_async(view) =~ "Changes saved"
+    assert {:ok, %{tags: ["raid", "clutch"]}} = Moments.get(name)
   end
 
   defp cut(view, start, stop) do

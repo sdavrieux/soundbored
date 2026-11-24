@@ -110,7 +110,6 @@ defmodule Soundboard.Sounds.UploadsTest do
 
     test "publishes canonical soundboard events after create", %{user: user} do
       Soundboard.PubSubTopics.subscribe_files()
-      Soundboard.PubSubTopics.subscribe_stats()
 
       name = "upload_events_#{System.unique_integer([:positive])}"
 
@@ -124,7 +123,6 @@ defmodule Soundboard.Sounds.UploadsTest do
                |> Uploads.create()
 
       assert_receive {:files_updated}
-      assert_receive {:stats_updated}
     end
 
     test "copies local file and persists sound", %{user: user} do

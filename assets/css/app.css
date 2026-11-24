@@ -183,10 +183,6 @@ body.sidebar-collapsed { --studio-sidebar-width:64px; }
 .code-block pre { width:100%; }
 .copy-button { min-height:36px; padding:0 14px; border-radius:8px; border:1px solid #d1d5db; background:#fff; color:#1f2937; font-size:13px; font-weight:600; }
 .copy-button:hover { background:#f3f4f6; }
-.stats-heart, .stats-week-button { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; flex:none; border-radius:999px; color:#6b7280; }
-.stats-heart:hover { color:#ef4444; background:#0000000a; }
-.stats-week-button:hover { background:#0000000a; color:#111827; }
-.stats-week-button:disabled { opacity:.35; cursor:not-allowed; background:none; }
 .editor-section { margin-top:24px; padding-top:20px; border-top:1px solid #e5e7eb; }
 .editor-heading { margin-bottom:12px; font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#6b7280; }
 .chip-wrap { display:flex; flex-wrap:wrap; gap:8px; }

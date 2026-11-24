@@ -81,7 +81,7 @@ defmodule SoundboardWeb.SettingsLive do
           </h2>
           <p class="text-sm text-gray-600 dark:text-gray-400">
             Create a personal token to play sounds remotely. Requests authenticated with a token
-            are attributed to your account and update your stats.
+            are attributed to your account.
           </p>
         </header>
 

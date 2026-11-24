@@ -7,7 +7,7 @@ defmodule SoundboardWeb.SoundboardLive do
   import UploadModal
   import SoundboardWeb.Components.Soundboard.TagComponents, only: [tag_filter_button: 1]
   import SoundboardWeb.Components.Soundboard.SoundCard, only: [sound_card: 1]
-  alias Soundboard.{Favorites, PubSubTopics, Sounds}
+  alias Soundboard.{PubSubTopics, Sounds}
   alias SoundboardWeb.Live.SoundboardLive.{BulkDeleteFlow, EditFlow, UploadFlow}
   alias SoundboardWeb.Live.Support.{FlashHelpers, SoundPlayback}
   alias SoundboardWeb.Soundboard.SoundFilter
@@ -33,7 +33,6 @@ defmodule SoundboardWeb.SoundboardLive do
       |> assign(:current_path, "/")
       |> assign(:current_user, get_user_from_session(session))
       |> assign_initial_state()
-      |> assign_favorites(get_user_from_session(session))
 
     if socket.assigns.flash do
       Process.send_after(self(), :clear_flash, 3000)
@@ -50,7 +49,6 @@ defmodule SoundboardWeb.SoundboardLive do
     |> assign(:editing, nil)
     |> assign(:selected_tags, [])
     |> assign(:tag_match, :all)
-    |> assign(:only_favorites, false)
     |> UploadFlow.assign_defaults()
     |> EditFlow.assign_defaults()
     |> BulkDeleteFlow.assign_defaults()
@@ -81,16 +79,10 @@ defmodule SoundboardWeb.SoundboardLive do
   end
 
   @impl true
-  def handle_event("toggle_favorites_filter", _params, socket) do
-    {:noreply, assign(socket, :only_favorites, !socket.assigns.only_favorites)}
-  end
-
-  @impl true
   def handle_event("clear_all_filters", _params, socket) do
     {:noreply,
      socket
      |> assign(:selected_tags, [])
-     |> assign(:only_favorites, false)
      |> assign(:search_query, "")}
   end
 
@@ -130,7 +122,7 @@ defmodule SoundboardWeb.SoundboardLive do
 
   @impl true
   def handle_event("clear_tag_filters", _, socket) do
-    {:noreply, socket |> assign(:selected_tags, []) |> assign(:only_favorites, false)}
+    {:noreply, assign(socket, :selected_tags, [])}
   end
 
   @impl true
@@ -244,24 +236,6 @@ defmodule SoundboardWeb.SoundboardLive do
   end
 
   @impl true
-  def handle_event("toggle_favorite", %{"sound-id" => sound_id}, socket) do
-    case socket.assigns.current_user do
-      nil ->
-        {:noreply, put_flash(socket, :error, "You must be logged in to favorite sounds")}
-
-      user ->
-        case Favorites.toggle_favorite(user.id, sound_id) do
-          {:ok, _favorite} ->
-            # The heart itself shows the change; a flash for every tap is noise.
-            {:noreply, assign_favorites(socket, user)}
-
-          {:error, reason} ->
-            {:noreply, put_flash(socket, :error, Favorites.error_message(reason))}
-        end
-    end
-  end
-
-  @impl true
   def handle_event("show_delete_confirm", _params, socket) do
     EditFlow.show_delete_confirm(socket)
   end
@@ -340,17 +314,6 @@ defmodule SoundboardWeb.SoundboardLive do
   def handle_event("update_volume", _params, socket), do: {:noreply, socket}
 
   @impl true
-  def handle_event("play_random", _params, socket) do
-    case get_random_sound(visible_sounds(socket)) do
-      nil ->
-        {:noreply, socket}
-
-      sound ->
-        SoundPlayback.play(socket, sound.filename)
-    end
-  end
-
-  @impl true
   def handle_event("stop_sound", _params, socket) do
     # Stop browser-based sounds
     socket = push_event(socket, "stop-all-sounds", %{})
@@ -391,13 +354,6 @@ defmodule SoundboardWeb.SoundboardLive do
      |> assign(:loading_sounds, false)}
   end
 
-  defp assign_favorites(socket, nil), do: assign(socket, :favorites, [])
-
-  defp assign_favorites(socket, user) do
-    favorites = Favorites.list_favorites(user.id)
-    assign(socket, :favorites, favorites)
-  end
-
   defp load_sound_files(socket) do
     socket
     |> assign(:uploaded_files, Sounds.list_detailed())
@@ -407,23 +363,12 @@ defmodule SoundboardWeb.SoundboardLive do
   defp visible_sounds(socket), do: shown_sounds(socket.assigns)
 
   defp shown_sounds(assigns) do
-    sounds =
-      filter_sounds(
-        assigns.uploaded_files,
-        assigns.search_query,
-        assigns.selected_tags,
-        assigns.tag_match
-      )
-
-    if assigns.only_favorites,
-      do: Enum.filter(sounds, &(&1.id in assigns.favorites)),
-      else: sounds
-  end
-
-  defp get_random_sound([]), do: nil
-
-  defp get_random_sound(sounds) do
-    Enum.random(sounds)
+    filter_sounds(
+      assigns.uploaded_files,
+      assigns.search_query,
+      assigns.selected_tags,
+      assigns.tag_match
+    )
   end
 
   defp handle_progress(:audio, _entry, socket) do

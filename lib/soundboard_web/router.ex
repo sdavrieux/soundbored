@@ -58,8 +58,6 @@ defmodule SoundboardWeb.Router do
     live_session :studio, on_mount: [SoundboardWeb.Live.Support.StudioControls] do
       live "/", SoundboardLive
       live "/moments", MomentsLive
-      live "/stats", StatsLive
-      live "/favorites", FavoritesLive
       live "/settings", SettingsLive
     end
 

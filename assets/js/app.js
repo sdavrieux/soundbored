@@ -86,6 +86,14 @@ const updateMaster = (percent) => {
   masterGain = clamp(Number(percent), 0, 100) / 100
   for (const audio of browserAudio) setElementGain(audio, audio.__clipGain ?? 1)
 }
+// Safari allows only a handful of AudioContexts per page, so previews share one.
+let sharedContext = null
+const getSharedContext = () => {
+  const Ctor = getAudioContextCtor()
+  if (!sharedContext && Ctor) sharedContext = new Ctor()
+  return sharedContext
+}
+
 const connectAudio = async (audio, context) => {
   if (!context) return
   if (!audio.__gainNode) {
@@ -558,7 +566,6 @@ Hooks.LocalPlayer = {
   destroyed() {
     this.el.removeEventListener("click", this.handleClick)
     this.stopPlayback()
-    this.audioContext?.close()
   },
   readGain() {
     const raw = parseFloat(this.el.dataset.volume)
@@ -592,7 +599,8 @@ Hooks.LocalPlayer = {
       audio.crossOrigin = "anonymous"
       audio.src = url
     } else if (filename) {
-      audio.src = `/uploads/${filename}`
+      // Names may contain #, ? or %, which would otherwise end the path early.
+      audio.src = `/uploads/${encodeURIComponent(filename)}`
     } else {
       return
     }
@@ -615,8 +623,7 @@ Hooks.LocalPlayer = {
   },
   async configureGain(targetGain) {
     if (!this.audio) return
-    const ContextCtor = getAudioContextCtor()
-    if (!this.audioContext && ContextCtor) this.audioContext = new ContextCtor()
+    this.audioContext = getSharedContext()
     try { await connectAudio(this.audio, this.audioContext) } catch (_err) {}
     setElementGain(this.audio, targetGain)
   },

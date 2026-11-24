@@ -41,6 +41,7 @@ defmodule Soundboard.Sound do
       :volume
     ])
     |> validate_required([:user_id])
+    |> validate_filename()
     |> validate_source_type()
     |> validate_volume()
     |> unique_constraint(:filename, name: :sounds_filename_index)
@@ -56,6 +57,31 @@ defmodule Soundboard.Sound do
     from s in query,
       join: t in assoc(s, :tags),
       where: t.name == ^tag_name
+  end
+
+  @filename_error "can't be empty, start with a dot, or contain / or \\"
+
+  @doc """
+  Whether a stored filename is a plain name inside the uploads folder: not empty,
+  no path separators or control characters, and not hidden or `..`.
+  """
+  def safe_filename?(filename) when is_binary(filename) do
+    name = Path.rootname(filename)
+
+    String.trim(name) != "" and byte_size(filename) <= 255 and
+      not String.starts_with?(filename, ".") and
+      not String.contains?(filename, ["/", "\\"]) and
+      not String.match?(filename, ~r/[\x00-\x1f\x7f]/)
+  end
+
+  def safe_filename?(_), do: false
+
+  def filename_error, do: @filename_error
+
+  defp validate_filename(changeset) do
+    validate_change(changeset, :filename, fn :filename, filename ->
+      if safe_filename?(filename), do: [], else: [filename: @filename_error]
+    end)
   end
 
   defp validate_source_type(changeset) do

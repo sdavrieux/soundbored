@@ -214,26 +214,4 @@
   <%= if @show_upload_modal do %>
     <.upload_modal {assigns} />
   <% end %>
-
-  <script>
-    window.addEventListener("phx:clear-tag-input", (e) => {
-      document.getElementById("tag-input").value = "";
-    })
-
-    window.addEventListener("phx:stop-all-sounds", (e) => {
-      // Stop all audio elements
-      document.querySelectorAll('audio').forEach(audio => {
-        audio.pause();
-        audio.currentTime = 0;
-      });
-      
-      // Reset all play/stop icons
-      document.querySelectorAll('.play-icon').forEach(icon => {
-        icon.classList.remove('hidden');
-      });
-      document.querySelectorAll('.stop-icon').forEach(icon => {
-        icon.classList.add('hidden');
-      });
-    });
-  </script>
 </div>

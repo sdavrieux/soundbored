@@ -121,6 +121,27 @@ defmodule Soundboard.Sounds.ManagementTest do
     refute setting.is_leave_sound
   end
 
+  test "update_sound/3 refuses names that would leave the uploads folder", %{user: user} do
+    filename = "safe_#{System.unique_integer([:positive])}.mp3"
+    sound = insert_local_sound(user, filename)
+    path = Path.join(uploads_dir(), filename)
+    File.write!(path, "audio")
+    on_exit(fn -> File.rm(path) end)
+
+    for name <- ["../escaped", "sub/dir", "..\\up", ".hidden", "   ", "bad\nname"] do
+      params = %{"filename" => name, "source_type" => "local", "volume" => "100"}
+
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Management.update_sound(sound, user.id, params)
+
+      assert %{filename: [_]} = errors_on(changeset)
+    end
+
+    assert File.exists?(path)
+    assert Repo.get!(Sound, sound.id).filename == filename
+    refute File.exists?(Path.join(Path.dirname(uploads_dir()), "escaped.mp3"))
+  end
+
   test "delete_sound/2 stays owner-only even when metadata edits are collaborative", %{user: user} do
     sound = insert_local_sound(user, "locked_#{System.unique_integer([:positive])}.mp3")
 

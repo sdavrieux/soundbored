@@ -17,13 +17,14 @@ defmodule SoundboardWeb.Components.Soundboard.TagComponents do
     <div class={@wrapper_class}>
       <%= for tag <- @tags do %>
         <% tag_name = tag_value(tag, @tag_key) %>
-        <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900 px-2 py-1 text-xs font-semibold text-blue-600 dark:text-blue-300">
+        <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900 py-1 pl-3 pr-1 text-sm font-semibold text-blue-600 dark:text-blue-300">
           {tag_name}
           <button
             type="button"
             phx-click={@remove_event}
             phx-value-tag={tag_name}
-            class="text-blue-600 dark:text-blue-300 hover:text-blue-500 dark:hover:text-blue-200"
+            aria-label={"Remove tag #{tag_name}"}
+            class="inline-flex h-8 w-8 items-center justify-center rounded-full text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800"
           >
             <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
               <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />

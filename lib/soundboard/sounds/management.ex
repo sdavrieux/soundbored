@@ -18,7 +18,7 @@ defmodule Soundboard.Sounds.Management do
         |> Repo.preload(:user_sound_settings)
 
       old_path = UploadsPath.file_path(db_sound.filename)
-      new_filename = params["filename"] <> Path.extname(db_sound.filename)
+      new_filename = String.trim(params["filename"] || "") <> Path.extname(db_sound.filename)
       new_path = UploadsPath.file_path(new_filename)
 
       sound_params = %{

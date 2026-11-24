@@ -126,23 +126,28 @@ defmodule SoundboardWeb.SettingsLive do
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <tr :if={@tokens == []}>
+                  <td colspan="5" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+                    No tokens yet. Create one above to use the API.
+                  </td>
+                </tr>
                 <%= for token <- @tokens do %>
                   <tr class="text-sm">
                     <td class="px-4 py-2 text-gray-900 dark:text-gray-100 whitespace-nowrap">
                       {token.label || "(no label)"}
                     </td>
                     <td class="px-4 py-2 align-top">
-                      <div class="relative">
+                      <div class="code-block">
                         <button
                           id={"copy-token-#{token.id}"}
                           type="button"
                           phx-hook="CopyButton"
                           data-copy-text={token.token}
-                          class="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded"
+                          class="copy-button"
                         >
                           Copy
                         </button>
-                        <pre class="p-2 pr-20 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto whitespace-nowrap"><code class="text-gray-800 dark:text-gray-100 font-mono">{token.token}</code></pre>
+                        <pre class="p-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto whitespace-nowrap"><code class="text-gray-800 dark:text-gray-100 font-mono">{token.token}</code></pre>
                       </div>
                     </td>
                     <td class="px-4 py-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">
@@ -178,17 +183,17 @@ defmodule SoundboardWeb.SettingsLive do
           <div class="space-y-4">
             <div>
               <div class="text-sm font-medium text-gray-700 dark:text-gray-300">List sounds</div>
-              <div class="relative">
+              <div class="code-block">
                 <button
                   id="copy-list-sounds"
                   type="button"
                   phx-hook="CopyButton"
                   data-copy-text={"curl -H \"Authorization: Bearer #{(@example_token || "<TOKEN>")}\" #{@base_url}/api/sounds"}
-                  class="absolute right-2 top-2 text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded"
+                  class="copy-button"
                 >
                   Copy
                 </button>
-                <pre class="mt-1 p-2 pr-16 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto whitespace-nowrap min-h-[56px]"><code class="text-gray-800 dark:text-gray-100 font-mono">curl -H \"Authorization: Bearer {(@example_token || "<TOKEN>")}\" {@base_url}/api/sounds</code></pre>
+                <pre class="mt-1 p-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto whitespace-nowrap min-h-[56px]"><code class="text-gray-800 dark:text-gray-100 font-mono">curl -H "Authorization: Bearer {(@example_token || "<TOKEN>")}" {@base_url}/api/sounds</code></pre>
               </div>
             </div>
             <div class="text-xs text-gray-600 dark:text-gray-400">
@@ -205,17 +210,17 @@ defmodule SoundboardWeb.SettingsLive do
               <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Upload local file (multipart/form-data)
               </div>
-              <div class="relative">
+              <div class="code-block">
                 <button
                   id="copy-upload-local"
                   type="button"
                   phx-hook="CopyButton"
                   data-copy-text={"curl -X POST -H \"Authorization: Bearer #{(@example_token || "<TOKEN>")}\" -F \"source_type=local\" -F \"name=<NAME>\" -F \"file=@/path/to/sound.mp3\" -F \"tags[]=meme\" -F \"tags[]=alert\" -F \"volume=90\" -F \"is_join_sound=true\" #{@base_url}/api/sounds"}
-                  class="absolute right-2 top-2 text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded"
+                  class="copy-button"
                 >
                   Copy
                 </button>
-                <pre class="mt-1 p-2 pr-16 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto min-h-[120px]"><code class="text-gray-800 dark:text-gray-100 font-mono">curl -X POST \
+                <pre class="mt-1 p-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto min-h-[120px]"><code class="text-gray-800 dark:text-gray-100 font-mono">curl -X POST \
     -H "Authorization: Bearer {(@example_token || "<TOKEN>")}" \
     -F "source_type=local" \
     -F "name=&lt;NAME&gt;" \
@@ -231,17 +236,17 @@ defmodule SoundboardWeb.SettingsLive do
               <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Upload from URL (JSON)
               </div>
-              <div class="relative">
+              <div class="code-block">
                 <button
                   id="copy-upload-url"
                   type="button"
                   phx-hook="CopyButton"
                   data-copy-text={"curl -X POST -H \"Authorization: Bearer #{(@example_token || "<TOKEN>")}\" -H \"Content-Type: application/json\" -d '{\"source_type\":\"url\",\"name\":\"wow\",\"url\":\"https://example.com/wow.mp3\",\"tags\":[\"meme\",\"reaction\"],\"volume\":90,\"is_leave_sound\":true}' #{@base_url}/api/sounds"}
-                  class="absolute right-2 top-2 text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded"
+                  class="copy-button"
                 >
                   Copy
                 </button>
-                <pre class="mt-1 p-2 pr-16 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto min-h-[110px]"><code class="text-gray-800 dark:text-gray-100 font-mono">curl -X POST \
+                <pre class="mt-1 p-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto min-h-[110px]"><code class="text-gray-800 dark:text-gray-100 font-mono">curl -X POST \
     -H "Authorization: Bearer {(@example_token || "<TOKEN>")}" \
     -H "Content-Type: application/json" \
     -d '&#123;"source_type":"url","name":"wow","url":"https://example.com/wow.mp3","tags":["meme","reaction"],"volume":90,"is_leave_sound":true&#125;' \
@@ -252,32 +257,32 @@ defmodule SoundboardWeb.SettingsLive do
               <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Play a sound by ID
               </div>
-              <div class="relative">
+              <div class="code-block">
                 <button
                   id="copy-play-sound"
                   type="button"
                   phx-hook="CopyButton"
                   data-copy-text={"curl -X POST -H \"Authorization: Bearer #{(@example_token || "<TOKEN>")}\" #{@base_url}/api/sounds/<SOUND_ID>/play"}
-                  class="absolute right-2 top-2 text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded"
+                  class="copy-button"
                 >
                   Copy
                 </button>
-                <pre class="mt-1 p-2 pr-16 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto whitespace-nowrap min-h-[56px]"><code class="text-gray-800 dark:text-gray-100 font-mono">curl -X POST -H \"Authorization: Bearer {(@example_token || "<TOKEN>")}\" {@base_url}/api/sounds/&lt;SOUND_ID&gt;/play</code></pre>
+                <pre class="mt-1 p-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto whitespace-nowrap min-h-[56px]"><code class="text-gray-800 dark:text-gray-100 font-mono">curl -X POST -H "Authorization: Bearer {(@example_token || "<TOKEN>")}" {@base_url}/api/sounds/&lt;SOUND_ID&gt;/play</code></pre>
               </div>
             </div>
             <div>
               <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Stop all sounds</div>
-              <div class="relative">
+              <div class="code-block">
                 <button
                   id="copy-stop-sounds"
                   type="button"
                   phx-hook="CopyButton"
                   data-copy-text={"curl -X POST -H \"Authorization: Bearer #{(@example_token || "<TOKEN>")}\" #{@base_url}/api/sounds/stop"}
-                  class="absolute right-2 top-2 text-xs px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded"
+                  class="copy-button"
                 >
                   Copy
                 </button>
-                <pre class="mt-1 p-2 pr-16 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto whitespace-nowrap min-h-[56px]"><code class="text-gray-800 dark:text-gray-100 font-mono">curl -X POST -H \"Authorization: Bearer {(@example_token || "<TOKEN>")}\" {@base_url}/api/sounds/stop</code></pre>
+                <pre class="mt-1 p-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-xs overflow-x-auto whitespace-nowrap min-h-[56px]"><code class="text-gray-800 dark:text-gray-100 font-mono">curl -X POST -H "Authorization: Bearer {(@example_token || "<TOKEN>")}" {@base_url}/api/sounds/stop</code></pre>
               </div>
             </div>
           </div>

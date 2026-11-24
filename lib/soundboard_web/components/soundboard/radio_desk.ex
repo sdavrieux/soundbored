@@ -36,7 +36,9 @@ defmodule SoundboardWeb.Components.Soundboard.RadioDesk do
       </div>
       <div class="master-control">
         <label for="master-volume">
-          <span><.volume_icon volume={@volume} /> Master volume</span>
+          <span class="master-name">
+            <.volume_icon volume={@volume} /> <span class="master-label-text">Master volume</span>
+          </span>
           <span id="master-volume-value">{@volume}%</span>
         </label>
         <input

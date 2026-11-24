@@ -562,4 +562,22 @@ defmodule Soundboard.SoundTest do
     })
     |> Repo.insert()
   end
+
+  test "safe_filename? only accepts plain names inside the uploads folder" do
+    assert Sound.safe_filename?("Drum roll #2.mp3")
+    assert Sound.safe_filename?("It's a trap.wav")
+
+    for name <- [
+          "../x.mp3",
+          "a/b.mp3",
+          "a\\b.mp3",
+          ".mp3",
+          ".hidden.mp3",
+          " .mp3",
+          "a\u0000.mp3",
+          nil
+        ] do
+      refute Sound.safe_filename?(name), inspect(name)
+    end
+  end
 end

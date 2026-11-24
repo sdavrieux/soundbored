@@ -69,7 +69,7 @@ defmodule SoundboardWeb.Components.Soundboard.SoundCard do
 
         <div class="mt-auto flex justify-end gap-1 pointer-events-auto">
           <button
-            id={"local-play-#{Path.basename(@sound.filename, Path.extname(@sound.filename))}"}
+            id={"local-play-#{@sound.id}"}
             type="button"
             phx-hook="LocalPlayer"
             data-filename={@sound.filename}

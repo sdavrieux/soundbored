@@ -112,6 +112,17 @@ defmodule SoundboardWeb.StatsLiveTest do
     assert html =~ SoundHelpers.display_name(sound.filename)
   end
 
+  test "survives the hourly week check and shows a letter when there is no avatar", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, "/stats")
+    send(view.pid, :check_week_rollover)
+    assert render(view) =~ "Top Users"
+    refute has_element?(view, "img[src='']")
+    assert has_element?(view, "time[phx-hook=LocalTime]")
+    assert has_element?(view, ".stats-heart[aria-label]")
+  end
+
   test "handles week navigation", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/stats")
 

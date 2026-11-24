@@ -52,6 +52,14 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       assert rendered =~ "test.mp3"
     end
 
+    test "sound pads have no random, favorite or uploader clutter", %{conn: conn} do
+      {:ok, view, html} = live(conn, "/")
+      refute has_element?(view, "[phx-click='play_random']")
+      refute has_element?(view, "[phx-click='toggle_favorite']")
+      refute has_element?(view, "#favorites-filter")
+      refute html =~ "by testuser"
+    end
+
     test "can play sound", %{conn: conn, sound: sound} do
       {:ok, view, _html} = live(conn, "/")
 
@@ -65,32 +73,9 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       end
     end
 
-    test "play random respects current search results", %{conn: conn, user: user} do
-      %Sound{}
-      |> Sound.changeset(%{
-        filename: "filtered.mp3",
-        source_type: "local",
-        user_id: user.id
-      })
-      |> Repo.insert!()
-
-      {:ok, view, _html} = live(conn, "/")
-
-      view
-      |> element("form")
-      |> render_change(%{"query" => "filtered"})
-
-      with_mock Soundboard.AudioPlayer, play_sound: fn _, _ -> :ok end do
-        view
-        |> element("[phx-click='play_random']")
-        |> render_click()
-
-        assert_called(Soundboard.AudioPlayer.play_sound("filtered.mp3", :_))
-      end
-    end
-
     test "a bottom bar FX chip plays sounds with that effect until it is tapped again", %{
-      conn: conn
+      conn: conn,
+      sound: sound
     } do
       {:ok, view, _html} = live(conn, "/")
       assert has_element?(view, ".studio-controls #fx-chips #fx-robot[aria-pressed='false']")
@@ -100,7 +85,10 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       assert_push_event(view, "fx-changed", %{effect: "robot"})
 
       with_mock Soundboard.AudioPlayer, play_sound: fn _, _, _ -> :ok end do
-        view |> element("[phx-click='play_random']") |> render_click()
+        view
+        |> element("[phx-click='play'][phx-value-name='#{sound.filename}']")
+        |> render_click()
+
         assert_called(Soundboard.AudioPlayer.play_sound(:_, :_, "robot"))
       end
 
@@ -109,7 +97,10 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       assert_push_event(view, "fx-changed", %{effect: nil})
 
       with_mock Soundboard.AudioPlayer, play_sound: fn _, _ -> :ok end do
-        view |> element("[phx-click='play_random']") |> render_click()
+        view
+        |> element("[phx-click='play'][phx-value-name='#{sound.filename}']")
+        |> render_click()
+
         assert_called(Soundboard.AudioPlayer.play_sound(:_, :_))
       end
     end
@@ -125,36 +116,6 @@ defmodule SoundboardWeb.SoundboardLiveTest do
 
       {:ok, view, _} = conn |> put_connect_params(%{"fx" => "rm -rf"}) |> live("/")
       refute has_element?(view, ".fx-chip[aria-pressed='true']")
-    end
-
-    test "play random respects selected tags", %{conn: conn, user: user} do
-      tag =
-        %Tag{}
-        |> Tag.changeset(%{name: "funny"})
-        |> Repo.insert!()
-
-      %Sound{}
-      |> Sound.changeset(%{
-        filename: "funny.mp3",
-        source_type: "local",
-        user_id: user.id,
-        tags: [tag]
-      })
-      |> Repo.insert!()
-
-      {:ok, view, _html} = live(conn, "/")
-
-      view
-      |> element("#tag-filters button[phx-value-tag='funny']")
-      |> render_click()
-
-      with_mock Soundboard.AudioPlayer, play_sound: fn _, _ -> :ok end do
-        view
-        |> element("[phx-click='play_random']")
-        |> render_click()
-
-        assert_called(Soundboard.AudioPlayer.play_sound("funny.mp3", :_))
-      end
     end
 
     test "several tags can be selected and narrow the grid together", %{conn: conn, user: user} do

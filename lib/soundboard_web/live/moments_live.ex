@@ -17,6 +17,8 @@ defmodule SoundboardWeb.MomentsLive do
      |> assign(:highlights, [])
      |> assign(:query, "")
      |> assign(:tag_filter, [])
+     |> assign(:tag_query, "")
+     |> assign(:sound_tags, Sounds.Tags.all_names())
      |> assign(:busy, false)}
   end
 
@@ -44,15 +46,34 @@ defmodule SoundboardWeb.MomentsLive do
   end
 
   def handle_event("edit_selection", %{"moment" => attrs}, socket) do
-    speakers =
-      case attrs["speakers"] do
-        nil -> socket.assigns.selection["speakers"]
-        ids -> Enum.reject(List.wrap(ids), &(&1 == ""))
-      end
-
-    attrs = Map.put(attrs, "speakers", speakers)
-
+    attrs = Map.put(attrs, "speakers", socket.assigns.selection["speakers"])
     {:noreply, socket |> assign(:selection, attrs) |> refresh_highlights()}
+  end
+
+  def handle_event("set_speakers", %{"moment" => attrs}, socket) do
+    speakers = attrs |> Map.get("speakers", []) |> List.wrap() |> Enum.reject(&(&1 == ""))
+    selection = Map.put(socket.assigns.selection, "speakers", speakers)
+
+    {:noreply, socket |> assign(:selection, selection) |> refresh_highlights()}
+  end
+
+  def handle_event("moment_tag_query", %{"tag" => query}, socket),
+    do: {:noreply, assign(socket, :tag_query, query)}
+
+  def handle_event("add_moment_tag", %{"tag" => tag}, socket) do
+    tags = Moments.clean_tags(chosen_tags(socket.assigns.selection) ++ [tag])
+
+    {:noreply,
+     socket
+     |> assign(:selection, Map.put(socket.assigns.selection, "tags", Enum.join(tags, ", ")))
+     |> assign(:tag_query, "")}
+  end
+
+  def handle_event("remove_moment_tag", %{"tag" => tag}, socket) do
+    tags = List.delete(chosen_tags(socket.assigns.selection), tag)
+
+    {:noreply,
+     assign(socket, :selection, Map.put(socket.assigns.selection, "tags", Enum.join(tags, ", ")))}
   end
 
   def handle_event("auto_trim", _, %{assigns: %{analysis: nil}} = socket),
@@ -78,7 +99,7 @@ defmodule SoundboardWeb.MomentsLive do
   end
 
   def handle_event("save_changes", %{"moment" => attrs}, socket),
-    do: operate(socket, :save, attrs)
+    do: operate(socket, :save, Map.put(attrs, "speakers", socket.assigns.selection["speakers"]))
 
   def handle_event("publish_moment", _, socket),
     do: operate(socket, :publish, socket.assigns.selection)
@@ -170,6 +191,7 @@ defmodule SoundboardWeb.MomentsLive do
     |> assign(:selected, moment)
     |> assign(:analysis, nil)
     |> assign(:highlights, [])
+    |> assign(:tag_query, "")
     |> assign(:selection, %{
       "title" => if(moment.titled, do: moment.title, else: ""),
       "tags" => Enum.join(moment.tags, ", "),
@@ -187,6 +209,30 @@ defmodule SoundboardWeb.MomentsLive do
       |> Map.put("stop", to_string(stop))
 
     assign(socket, :selection, selection)
+  end
+
+  defp chosen_tags(selection), do: Moments.clean_tags(selection["tags"])
+
+  # Existing tags not yet on this moment that contain the query, moment tags first.
+  defp tag_matches(assigns) do
+    query = assigns.tag_query |> String.trim() |> String.downcase()
+    taken = chosen_tags(assigns.selection)
+
+    (assigns.all_tags ++ Enum.map(assigns.sound_tags, &String.downcase/1))
+    |> Enum.uniq()
+    |> Enum.reject(&(&1 in taken or not String.contains?(&1, query)))
+    |> Enum.take(12)
+  end
+
+  defp new_tag(assigns) do
+    case Moments.clean_tags([assigns.tag_query]) do
+      [tag] ->
+        known = assigns.all_tags ++ Enum.map(assigns.sound_tags, &String.downcase/1)
+        if tag in known or tag in chosen_tags(assigns.selection), do: nil, else: tag
+
+      _ ->
+        nil
+    end
   end
 
   defp chosen(%{selected: %{speakers: []}}), do: []
@@ -238,6 +284,14 @@ defmodule SoundboardWeb.MomentsLive do
       assigns
       |> assign(:visible, visible(assigns.moments, assigns.query, assigns.tag_filter))
       |> assign(:all_tags, Moments.all_tags(assigns.moments))
+
+    assigns =
+      if assigns.selected,
+        do:
+          assigns
+          |> assign(:tag_matches, tag_matches(assigns))
+          |> assign(:new_tag, new_tag(assigns)),
+        else: assigns
 
     ~H"""
     <div class="page">
@@ -343,6 +397,39 @@ defmodule SoundboardWeb.MomentsLive do
               · {format_duration(@selected.duration)}
             </p>
 
+            <form
+              :if={@selected.speakers != []}
+              id="moment-speakers"
+              phx-change="set_speakers"
+              class="editor-section"
+              aria-labelledby="speakers-heading"
+            >
+              <h3 id="speakers-heading" class="editor-heading">Speakers</h3>
+              <input type="hidden" name="moment[speakers][]" value="" />
+              <div class="chip-wrap">
+                <label
+                  :for={speaker <- @selected.speakers}
+                  class={["chip", speaker.id in (@selection["speakers"] || []) && "is-active"]}
+                >
+                  <input
+                    type="checkbox"
+                    name="moment[speakers][]"
+                    value={speaker.id}
+                    checked={speaker.id in (@selection["speakers"] || [])}
+                    class="sr-only"
+                    disabled={@busy}
+                  />
+                  {speaker.name}
+                </label>
+              </div>
+              <p :if={(@selection["speakers"] || []) == []} class="field-hint text-red-600">
+                Keep at least one speaker.
+              </p>
+              <p :if={(@selection["speakers"] || []) != []} class="field-hint">
+                Tap a name to leave them out. The waveform and player switch to the new mix.
+              </p>
+            </form>
+
             <section class="editor-section" aria-labelledby="cut-heading">
               <h3 id="cut-heading" class="editor-heading">Cut</h3>
               <div id={"cutter-#{@selected.name}-#{@selected.revision}"} phx-update="ignore">
@@ -378,38 +465,6 @@ defmodule SoundboardWeb.MomentsLive do
               <input type="hidden" id="trim-start" name="moment[start]" value={@selection["start"]} />
               <input type="hidden" id="trim-stop" name="moment[stop]" value={@selection["stop"]} />
 
-              <section
-                :if={@selected.speakers != []}
-                id="moment-speakers"
-                class="editor-section"
-                aria-labelledby="speakers-heading"
-              >
-                <h3 id="speakers-heading" class="editor-heading">Speakers</h3>
-                <input type="hidden" name="moment[speakers][]" value="" />
-                <div class="chip-wrap">
-                  <label
-                    :for={speaker <- @selected.speakers}
-                    class={["chip", speaker.id in (@selection["speakers"] || []) && "is-active"]}
-                  >
-                    <input
-                      type="checkbox"
-                      name="moment[speakers][]"
-                      value={speaker.id}
-                      checked={speaker.id in (@selection["speakers"] || [])}
-                      class="sr-only"
-                      disabled={@busy}
-                    />
-                    {speaker.name}
-                  </label>
-                </div>
-                <p :if={(@selection["speakers"] || []) == []} class="field-hint text-red-600">
-                  Keep at least one speaker.
-                </p>
-                <p :if={(@selection["speakers"] || []) != []} class="field-hint">
-                  Tap a name to leave them out. The waveform and player switch to the new mix.
-                </p>
-              </section>
-
               <section class="editor-section space-y-4" aria-labelledby="label-heading">
                 <h3 id="label-heading" class="editor-heading">Name and tags</h3>
                 <label class="block font-medium">
@@ -425,20 +480,59 @@ defmodule SoundboardWeb.MomentsLive do
                     disabled={@busy}
                   />
                 </label>
-                <label class="block font-medium">
-                  Tags<input
-                    name="moment[tags]"
-                    value={@selection["tags"]}
-                    placeholder="funny, fail, raid"
+                <input type="hidden" name="moment[tags]" value={@selection["tags"]} />
+                <div id="moment-tags">
+                  <label for="moment-tag-query" class="block font-medium">Tags</label>
+                  <div :if={chosen_tags(@selection) != []} class="chip-wrap mt-1">
+                    <button
+                      :for={tag <- chosen_tags(@selection)}
+                      type="button"
+                      phx-click="remove_moment_tag"
+                      phx-value-tag={tag}
+                      class="chip is-active"
+                      aria-label={"Remove tag #{tag}"}
+                      disabled={@busy}
+                    >
+                      {tag} <.icon name="hero-x-mark" class="w-4 h-4" />
+                    </button>
+                  </div>
+                  <input
+                    id="moment-tag-query"
+                    form="moment-new-tag"
+                    name="tag"
+                    value={@tag_query}
+                    placeholder="Find or create a tag"
                     autocomplete="off"
-                    phx-debounce="300"
-                    class="field mt-1"
+                    phx-debounce="150"
+                    class="field mt-2"
                     disabled={@busy}
                   />
+                  <div class="chip-wrap mt-2">
+                    <button
+                      :if={@new_tag}
+                      type="button"
+                      phx-click="add_moment_tag"
+                      phx-value-tag={@new_tag}
+                      class="chip chip-clear"
+                      disabled={@busy}
+                    >
+                      <.icon name="hero-plus" class="w-4 h-4" /> Create “{@new_tag}”
+                    </button>
+                    <button
+                      :for={tag <- @tag_matches}
+                      type="button"
+                      phx-click="add_moment_tag"
+                      phx-value-tag={tag}
+                      class="chip"
+                      disabled={@busy}
+                    >
+                      {tag}
+                    </button>
+                  </div>
                   <span class="field-hint">
-                    Separate with commas. Published sounds get these tags too.
+                    Tap a tag to add it, or type a new one and press Enter. Published sounds get these tags too.
                   </span>
-                </label>
+                </div>
               </section>
 
               <section class="editor-section" aria-labelledby="finish-heading">
@@ -475,6 +569,8 @@ defmodule SoundboardWeb.MomentsLive do
                 </div>
                 <p :if={@busy} role="status" class="field-hint">Working…</p>
               </section>
+            </form>
+            <form id="moment-new-tag" phx-change="moment_tag_query" phx-submit="add_moment_tag">
             </form>
 
             <div class="editor-section flex flex-wrap gap-3 items-center">

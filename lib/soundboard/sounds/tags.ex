@@ -4,12 +4,17 @@ defmodule Soundboard.Sounds.Tags do
   """
 
   import Ecto.Changeset
+  import Ecto.Query
 
   alias Soundboard.{Repo, Sound, Tag}
 
   def search(query) do
     Tag.search(query)
     |> Repo.all()
+  end
+
+  def all_names do
+    Repo.all(from t in Tag, select: t.name, order_by: t.name)
   end
 
   def all_for_sounds(sounds) do

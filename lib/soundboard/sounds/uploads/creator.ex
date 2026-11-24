@@ -1,7 +1,7 @@
 defmodule Soundboard.Sounds.Uploads.Creator do
   @moduledoc false
 
-  alias Soundboard.{PubSubTopics, Repo, Sound, Stats, UserSoundSetting}
+  alias Soundboard.{PubSubTopics, Repo, Sound, UserSoundSetting}
   alias Soundboard.Sounds.Tags
   alias Soundboard.Sounds.Uploads.Source
 
@@ -65,6 +65,5 @@ defmodule Soundboard.Sounds.Uploads.Creator do
 
   defp broadcast_updates do
     PubSubTopics.broadcast_files_updated()
-    Stats.broadcast_stats_update()
   end
 end

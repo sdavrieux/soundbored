@@ -28,8 +28,6 @@ defmodule SoundboardWeb.Components.Layouts.Navbar do
             {path, label, icon} <- [
               {"/", "Sounds", "hero-squares-2x2"},
               {"/moments", "Saved moments", "hero-scissors"},
-              {"/favorites", "Favorites", "hero-heart"},
-              {"/stats", "Stats", "hero-chart-bar"},
               {"/settings", "Settings", "hero-cog-6-tooth"}
             ]
           }

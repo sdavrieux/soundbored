@@ -6,7 +6,6 @@ defmodule Soundboard.AudioPlayer.PlaybackEngine do
   alias Soundboard.Accounts.User
   alias Soundboard.{AudioPlayer, AudioPlayer.Notifier, AudioPlayer.SoundLibrary, Discord.Voice}
 
-  @system_users ["System"]
   @rtp_probe_poll_ms 20
   @rtp_probe_default_timeout_ms 6_000
   @voice_not_ready_retry_ms 350
@@ -59,7 +58,6 @@ defmodule Soundboard.AudioPlayer.PlaybackEngine do
     case voice_play(play_request) |> classify_play_attempt() do
       :ok ->
         maybe_probe_first_rtp(play_request.guild_id, play_request.sound_name, attempt + 1)
-        track_play_if_needed(play_request.sound_name, play_request.actor)
         broadcast_success(play_request.sound_name, play_request.actor)
         :ok
 
@@ -361,27 +359,6 @@ defmodule Soundboard.AudioPlayer.PlaybackEngine do
     error -> {:error, {:voice_playback_unavailable, Exception.message(error)}}
   end
 
-  defp track_play_if_needed(sound_name, actor) do
-    cond do
-      system_user?(actor) ->
-        :ok
-
-      is_integer(actor_user_id(actor)) ->
-        Soundboard.Stats.track_play(sound_name, actor_user_id(actor))
-
-      is_binary(actor_display_name(actor)) ->
-        username = actor_display_name(actor)
-
-        case Soundboard.Repo.get_by(User, username: username) do
-          %{id: user_id} -> Soundboard.Stats.track_play(sound_name, user_id)
-          nil -> Logger.warning("Could not find user_id for #{username}")
-        end
-
-      true ->
-        Logger.warning("Could not determine playback actor for #{sound_name}")
-    end
-  end
-
   defp broadcast_success(sound_name, actor) do
     Notifier.sound_played(sound_name, actor_display_name(actor) || "Unknown")
   end
@@ -416,10 +393,4 @@ defmodule Soundboard.AudioPlayer.PlaybackEngine do
   defp actor_display_name(%User{username: username}) when is_binary(username), do: username
   defp actor_display_name(username) when is_binary(username), do: username
   defp actor_display_name(_), do: nil
-
-  defp actor_user_id(%{user_id: user_id}) when is_integer(user_id), do: user_id
-  defp actor_user_id(%User{id: user_id}) when is_integer(user_id), do: user_id
-  defp actor_user_id(_), do: nil
-
-  defp system_user?(actor), do: actor_display_name(actor) in @system_users
 end

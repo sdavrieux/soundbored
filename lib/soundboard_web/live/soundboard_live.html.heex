@@ -4,7 +4,7 @@
     <div>
       <h1 class="page-title">Sounds</h1>
       <p class="page-subtitle">
-        <%= if @selected_tags != [] or @search_query != "" or @only_favorites do %>
+        <%= if @selected_tags != [] or @search_query != "" do %>
           Showing {length(shown)} of {length(@uploaded_files)}
         <% else %>
           {length(@uploaded_files)} sounds
@@ -12,13 +12,6 @@
       </p>
     </div>
     <div class="page-actions">
-      <button
-        phx-click="play_random"
-        class="studio-button btn-secondary"
-        title="Play a random sound from the ones shown"
-      >
-        <.icon name="hero-sparkles" class="w-5 h-5" /> Random
-      </button>
       <%= if @current_user do %>
         <button
           id="toggle-selecting"
@@ -68,15 +61,6 @@
     <% ordered_tags = @selected_tags ++ Enum.reject(tags, &tag_selected?(&1, @selected_tags)) %>
     <div id="tag-filters" class="chip-row" aria-label="Filter by tag">
       <button
-        :if={@current_user}
-        id="favorites-filter"
-        phx-click="toggle_favorites_filter"
-        aria-pressed={to_string(@only_favorites)}
-        class={["chip", @only_favorites && "is-active"]}
-      >
-        <.icon name="hero-heart-solid" class="w-4 h-4" /> Favorites
-      </button>
-      <button
         :if={length(@selected_tags) > 1}
         id="tag-match-toggle"
         phx-click="toggle_tag_match"
@@ -97,7 +81,7 @@
         uploaded_files={@uploaded_files}
       />
       <button
-        :if={@selected_tags != [] or @only_favorites}
+        :if={@selected_tags != []}
         id="clear-tag-filters"
         phx-click="clear_tag_filters"
         class="chip chip-clear"
@@ -183,8 +167,6 @@
         <%= for sound <- shown do %>
           <.sound_card
             sound={sound}
-            favorite={sound.id in @favorites}
-            show_favorite={@current_user != nil}
             selecting={@selecting}
             selectable={@selecting && BulkDeleteFlow.deletable?(sound, assigns)}
             selected={MapSet.member?(@selected_ids, sound.id)}

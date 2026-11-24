@@ -47,9 +47,7 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
          end
        ]},
       {Soundboard.PubSubTopics, [],
-       [broadcast_sound_played: fn "intro.mp3", "System" -> send(test_pid, :broadcast_played) end]},
-      {Soundboard.Stats, [],
-       [track_play: fn _sound_name, _user_id -> send(test_pid, :tracked_play) end]}
+       [broadcast_sound_played: fn "intro.mp3", "System" -> send(test_pid, :broadcast_played) end]}
     ]) do
       assert :ok =
                PlaybackEngine.play(
@@ -64,7 +62,6 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
       assert_receive :joined_channel
       assert_receive :played_sound
       assert_receive :broadcast_played
-      refute_received :tracked_play
     end
   end
 
@@ -94,9 +91,7 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
          end
        ]},
       {Soundboard.PubSubTopics, [],
-       [broadcast_sound_played: fn "retry.mp3", "System" -> send(test_pid, :broadcast_played) end]},
-      {Soundboard.Stats, [],
-       [track_play: fn _sound_name, _user_id -> send(test_pid, :tracked_play) end]}
+       [broadcast_sound_played: fn "retry.mp3", "System" -> send(test_pid, :broadcast_played) end]}
     ]) do
       assert :ok =
                PlaybackEngine.play(
@@ -111,7 +106,6 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
       assert_receive :stopped_audio
       assert_receive :played_after_retry
       assert_receive :broadcast_played
-      refute_received :tracked_play
     end
   end
 
@@ -167,9 +161,7 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
            send(test_pid, :broadcast_played)
          end,
          broadcast_error: fn message -> flunk("unexpected playback error: #{message}") end
-       ]},
-      {Soundboard.Stats, [],
-       [track_play: fn _sound_name, _user_id -> send(test_pid, :tracked_play) end]}
+       ]}
     ]) do
       assert :ok =
                PlaybackEngine.play(
@@ -184,7 +176,6 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
       assert_receive :refreshed_voice
       assert_receive :played_after_refresh
       assert_receive :broadcast_played
-      refute_received :tracked_play
     end
   end
 
@@ -241,8 +232,7 @@ defmodule Soundboard.AudioPlayer.PlaybackEngineTest do
            [
              broadcast_sound_played: fn _, _ -> :ok end,
              broadcast_error: fn _ -> :ok end
-           ]},
-          {Soundboard.Stats, [], [track_play: fn _, _ -> :ok end]}
+           ]}
         ]) do
           assert :ok =
                    PlaybackEngine.play(

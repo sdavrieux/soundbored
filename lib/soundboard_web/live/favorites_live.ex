@@ -4,6 +4,7 @@ defmodule SoundboardWeb.FavoritesLive do
   alias Soundboard.{Favorites, PubSubTopics}
   alias SoundboardWeb.Live.Support.{FlashHelpers, SoundPlayback}
   import FlashHelpers, only: [flash_sound_played: 2, clear_flash_after_timeout: 1]
+  import SoundboardWeb.SoundHelpers, only: [display_name: 1]
   require Logger
 
   @impl true
@@ -37,10 +38,8 @@ defmodule SoundboardWeb.FavoritesLive do
       user ->
         case Favorites.toggle_favorite(user.id, sound_id) do
           {:ok, _favorite} ->
-            {:noreply,
-             socket
-             |> assign_favorites_state(user)
-             |> put_flash(:info, "Favorites updated")}
+            # The card disappearing (or its heart) shows the change; no toast needed.
+            {:noreply, assign_favorites_state(socket, user)}
 
           {:error, reason} ->
             {:noreply, put_flash(socket, :error, Favorites.error_message(reason))}
@@ -63,7 +62,7 @@ defmodule SoundboardWeb.FavoritesLive do
 
     {:noreply,
      socket
-     |> put_flash(:info, "#{username} played #{filename}")
+     |> put_flash(:info, "#{username} played #{display_name(filename)}")
      |> clear_flash_after_timeout()}
   end
 

@@ -148,6 +148,25 @@ defmodule SoundboardWeb.API.SoundControllerTest do
       on_exit(fn -> File.rm(copied_file) end)
     end
 
+    test "refuses upload names that would write outside the uploads folder", %{conn: conn} do
+      tmp_path = temp_upload_path("escape.mp3")
+      File.write!(tmp_path, "audio")
+      on_exit(fn -> File.rm(tmp_path) end)
+      escape = "../escape_#{System.unique_integer([:positive])}"
+      upload = %Plug.Upload{path: tmp_path, filename: "escape.mp3", content_type: "audio/mpeg"}
+
+      conn =
+        post(conn, ~p"/api/sounds", %{
+          "source_type" => "local",
+          "name" => escape,
+          "file" => upload
+        })
+
+      assert %{"errors" => %{"filename" => [_]}} = json_response(conn, 422)
+      refute File.exists?(Path.join(uploads_dir(), escape <> ".mp3"))
+      refute Repo.get_by(Sound, filename: escape <> ".mp3")
+    end
+
     test "infers local source type when multipart file is present", %{conn: conn} do
       name = "api_local_inferred_#{System.unique_integer([:positive])}"
       tmp_path = temp_upload_path("inferred.mp3")

@@ -192,7 +192,7 @@ defmodule SoundboardWeb.Components.Soundboard.UploadModal do
     <!-- Sound Settings -->
                 <div class="mt-5 mb-4">
                   <div class="flex flex-col gap-3 text-left">
-                    <label class="relative flex items-start">
+                    <label class="relative flex items-center min-h-[44px] cursor-pointer">
                       <div class="flex h-6 items-center">
                         <input
                           type="checkbox"
@@ -211,7 +211,7 @@ defmodule SoundboardWeb.Components.Soundboard.UploadModal do
                       </div>
                     </label>
 
-                    <label class="relative flex items-start">
+                    <label class="relative flex items-center min-h-[44px] cursor-pointer">
                       <div class="flex h-6 items-center">
                         <input
                           type="checkbox"

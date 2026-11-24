@@ -141,13 +141,19 @@ defmodule Soundboard.Sounds.Uploads.Source do
     end
   end
 
+  # Checked before anything is copied, so a name can never write outside uploads.
   defp validate_destination_filename(filename) do
     dest_path = UploadsPath.file_path(filename)
 
-    if filename_taken?(filename) or File.exists?(dest_path) do
-      {:error, add_error(change(%Sound{}), :filename, "has already been taken")}
-    else
-      :ok
+    cond do
+      not Sound.safe_filename?(filename) ->
+        {:error, add_error(change(%Sound{}), :filename, Sound.filename_error())}
+
+      filename_taken?(filename) or File.exists?(dest_path) ->
+        {:error, add_error(change(%Sound{}), :filename, "has already been taken")}
+
+      true ->
+        :ok
     end
   end
 

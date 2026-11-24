@@ -56,7 +56,7 @@ defmodule SoundboardWeb.Components.Soundboard.VolumeControl do
         <button
           type="button"
           data-role="volume-preview"
-          class="px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          class="min-h-[40px] px-4 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={@preview_disabled}
         >
           {@preview_label}

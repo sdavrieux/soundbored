@@ -110,7 +110,7 @@ defmodule SoundboardWeb.Components.Soundboard.EditModal do
                 <% preview_kind = if @current_sound.source_type == "url", do: "url", else: "existing" %>
                 <% preview_src =
                   if preview_kind == "existing",
-                    do: "/uploads/#{@current_sound.filename}",
+                    do: "/uploads/#{URI.encode(@current_sound.filename, &URI.char_unreserved?/1)}",
                     else: @current_sound.url %>
                 <VolumeControl.volume_control
                   id="edit-volume-control"
@@ -166,14 +166,14 @@ defmodule SoundboardWeb.Components.Soundboard.EditModal do
                         @current_sound.user_sound_settings || [],
                         &(&1.user_id == @current_user.id)
                       ) %>
-                    <label class="relative flex items-start">
+                    <label class="relative flex items-center min-h-[44px] cursor-pointer">
                       <div class="flex h-6 items-center">
                         <input
                           type="checkbox"
                           name="is_join_sound"
                           value="true"
                           checked={user_setting && user_setting.is_join_sound}
-                          class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                          class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-600"
                         />
                       </div>
                       <div class="ml-3 text-sm leading-6">
@@ -183,14 +183,14 @@ defmodule SoundboardWeb.Components.Soundboard.EditModal do
                       </div>
                     </label>
 
-                    <label class="relative flex items-start">
+                    <label class="relative flex items-center min-h-[44px] cursor-pointer">
                       <div class="flex h-6 items-center">
                         <input
                           type="checkbox"
                           name="is_leave_sound"
                           value="true"
                           checked={user_setting && user_setting.is_leave_sound}
-                          class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                          class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-600"
                         />
                       </div>
                       <div class="ml-3 text-sm leading-6">

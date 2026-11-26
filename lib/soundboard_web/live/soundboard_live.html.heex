@@ -96,7 +96,7 @@
       <div class="flex items-center gap-2 w-full">
         <span class="font-semibold">{MapSet.size(@selected_ids)} selected</span>
         <span class="text-xs text-gray-500 dark:text-gray-400">
-          Only sounds you uploaded can be selected.
+          Delete only removes sounds you uploaded.
         </span>
       </div>
       <form
@@ -132,13 +132,28 @@
         >
           Clear
         </button>
+        <%= if MapSet.size(@selected_ids) > 0 do %>
+          <a
+            id="download-selected"
+            href={BulkDeleteFlow.download_path(@selected_ids)}
+            download
+            class="studio-button btn-primary"
+          >
+            <.icon name="hero-arrow-down-tray" class="w-5 h-5" /> Download
+          </a>
+        <% else %>
+          <button id="download-selected" disabled class="studio-button btn-primary">
+            <.icon name="hero-arrow-down-tray" class="w-5 h-5" /> Download
+          </button>
+        <% end %>
+        <% deletable = length(BulkDeleteFlow.deletable_selected(assigns)) %>
         <button
           id="delete-selected"
           phx-click="show_bulk_delete_confirm"
-          disabled={MapSet.size(@selected_ids) == 0}
+          disabled={deletable == 0}
           class="studio-button btn-danger"
         >
-          Delete
+          {if deletable == MapSet.size(@selected_ids), do: "Delete", else: "Delete #{deletable}"}
         </button>
       </div>
     </div>
@@ -168,7 +183,7 @@
           <.sound_card
             sound={sound}
             selecting={@selecting}
-            selectable={@selecting && BulkDeleteFlow.deletable?(sound, assigns)}
+            selectable={@selecting}
             selected={MapSet.member?(@selected_ids, sound.id)}
           />
         <% end %>
@@ -190,7 +205,7 @@
   <% end %>
 
   <%= if @show_bulk_delete_confirm do %>
-    <.bulk_delete_modal sounds={BulkDeleteFlow.selected_sounds(assigns)} />
+    <.bulk_delete_modal sounds={BulkDeleteFlow.deletable_selected(assigns)} />
   <% end %>
 
   <%= if @show_upload_modal do %>

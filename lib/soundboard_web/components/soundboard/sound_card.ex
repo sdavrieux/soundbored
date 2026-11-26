@@ -47,7 +47,7 @@ defmodule SoundboardWeb.Components.Soundboard.SoundCard do
             class={[
               "mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border",
               if(@selected,
-                do: "bg-red-600 border-red-600 text-white",
+                do: "bg-blue-600 border-blue-600 text-white",
                 else: "border-gray-400 dark:border-gray-500"
               )
             ]}

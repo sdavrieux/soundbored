@@ -61,6 +61,7 @@ defmodule SoundboardWeb.Router do
       live "/settings", SettingsLive
     end
 
+    get "/sounds/download", SoundDownloadController, :show
     get "/moments/:name/audio", RecordingController, :preview
     get "/recordings/:name", RecordingController, :show
   end

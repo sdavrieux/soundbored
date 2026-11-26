@@ -157,7 +157,7 @@ body.sidebar-collapsed { --studio-sidebar-width:64px; }
 .sound-pad { position:relative; min-height:96px; border-radius:12px; background:#fff; border:1px solid #e5e7eb; box-shadow:0 1px 2px #0000000d; transition:box-shadow .15s, transform .1s; }
 .sound-pad:hover { box-shadow:0 4px 12px #0000001a; }
 .sound-pad:active { transform:scale(.98); }
-.sound-pad.is-selected { outline:3px solid #dc2626; outline-offset:-1px; }
+.sound-pad.is-selected { outline:3px solid #2563eb; outline-offset:-1px; }
 .sound-pad-hit { position:absolute; inset:0; z-index:0; width:100%; border-radius:12px; cursor:pointer; }
 .sound-pad-hit:disabled { cursor:not-allowed; }
 .sound-pad-hit:focus-visible { outline-offset:-3px; }

@@ -23,7 +23,7 @@ defmodule SoundboardWeb.Live.SoundboardLive.BulkDeleteFlow do
 
   def toggle_select(socket, id) do
     with {:ok, id} <- parse_id(id),
-         %{} <- Enum.find(deletable_sounds(socket), &(&1.id == id)) do
+         %{} <- Enum.find(socket.assigns.uploaded_files, &(&1.id == id)) do
       selected = socket.assigns.selected_ids
 
       selected =
@@ -38,10 +38,7 @@ defmodule SoundboardWeb.Live.SoundboardLive.BulkDeleteFlow do
   end
 
   def select_visible(socket, visible_sounds) do
-    ids =
-      visible_sounds
-      |> Enum.filter(&deletable?(&1, socket))
-      |> MapSet.new(& &1.id)
+    ids = MapSet.new(visible_sounds, & &1.id)
 
     {:noreply, assign(socket, :selected_ids, MapSet.union(socket.assigns.selected_ids, ids))}
   end
@@ -51,7 +48,8 @@ defmodule SoundboardWeb.Live.SoundboardLive.BulkDeleteFlow do
   end
 
   def show_confirm(socket) do
-    {:noreply, assign(socket, :show_bulk_delete_confirm, selected_sounds(socket.assigns) != [])}
+    {:noreply,
+     assign(socket, :show_bulk_delete_confirm, deletable_selected(socket.assigns) != [])}
   end
 
   def hide_confirm(socket) do
@@ -66,7 +64,7 @@ defmodule SoundboardWeb.Live.SoundboardLive.BulkDeleteFlow do
 
     {deleted, failed} =
       socket.assigns
-      |> selected_sounds()
+      |> deletable_selected()
       |> Enum.split_with(&(Sounds.delete_sound(&1, user_id) == :ok))
 
     if deleted != [], do: LiveTags.broadcast_update()
@@ -125,14 +123,21 @@ defmodule SoundboardWeb.Live.SoundboardLive.BulkDeleteFlow do
     Enum.filter(assigns.uploaded_files, &MapSet.member?(assigns.selected_ids, &1.id))
   end
 
+  @doc "Selected sounds the current user uploaded; only these can be deleted."
+  def deletable_selected(assigns) do
+    assigns |> selected_sounds() |> Enum.filter(&deletable?(&1, assigns))
+  end
+
+  @doc "Link that downloads the selection: one file, or a zip for several."
+  def download_path(selected_ids) do
+    ids = selected_ids |> Enum.sort() |> Enum.join(",")
+    "/sounds/download?" <> URI.encode_query(ids: ids)
+  end
+
   def deletable?(sound, %{assigns: assigns}), do: deletable?(sound, assigns)
 
   def deletable?(sound, %{current_user: %{id: user_id}}), do: sound.user_id == user_id
   def deletable?(_sound, _assigns), do: false
-
-  defp deletable_sounds(socket) do
-    Enum.filter(socket.assigns.uploaded_files, &deletable?(&1, socket))
-  end
 
   defp parse_id(id) when is_integer(id), do: {:ok, id}
 

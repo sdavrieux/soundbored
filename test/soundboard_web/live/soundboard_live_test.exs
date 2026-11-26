@@ -588,24 +588,32 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       refute has_element?(view, "#selection-toolbar")
     end
 
-    test "sounds owned by other users cannot be selected", %{conn: conn, foreign: foreign} do
+    test "sounds owned by other users can be selected but are not deleted", %{
+      conn: conn,
+      sound: sound,
+      second: second,
+      foreign: foreign
+    } do
       {:ok, view, _html} = live(conn, "/")
 
       view |> element("#toggle-selecting") |> render_click()
+      refute has_element?(view, "#select-sound-#{foreign.id}[disabled]")
 
-      assert has_element?(view, "#select-sound-#{foreign.id}[disabled]")
-
-      render_click(view, "toggle_select", %{"id" => to_string(foreign.id)})
-      assert render(view) =~ "0 selected"
+      view |> element("#select-sound-#{foreign.id}") |> render_click()
+      assert render(view) =~ "1 selected"
+      assert has_element?(view, "#delete-selected[disabled]")
 
       view |> element("button", "Select all shown") |> render_click()
-      assert render(view) =~ "2 selected"
+      assert render(view) =~ "3 selected"
+      assert has_element?(view, "#delete-selected", "Delete 2")
 
       view |> element("#delete-selected") |> render_click()
+      refute has_element?(view, "#bulk-delete-modal", "foreign")
       view |> element("#confirm-bulk-delete") |> render_click()
 
       assert Repo.get(Sound, foreign.id)
-      assert Repo.aggregate(Sound, :count) == 1
+      refute Repo.get(Sound, sound.id)
+      refute Repo.get(Sound, second.id)
     end
 
     test "cancelling keeps the selection and the sounds", %{conn: conn, sound: sound} do
@@ -619,6 +627,29 @@ defmodule SoundboardWeb.SoundboardLiveTest do
       refute has_element?(view, "#bulk-delete-modal")
       assert render(view) =~ "1 selected"
       assert Repo.get(Sound, sound.id)
+    end
+  end
+
+  describe "bulk download" do
+    test "links the selected sounds to one download", %{conn: conn, sound: sound} do
+      other =
+        %Sound{}
+        |> Sound.changeset(%{filename: "other.mp3", source_type: "local", user_id: sound.user_id})
+        |> Repo.insert!()
+
+      {:ok, view, _html} = live(conn, "/")
+      view |> element("#toggle-selecting") |> render_click()
+      assert has_element?(view, "button#download-selected[disabled]")
+
+      view |> element("#select-sound-#{sound.id}") |> render_click()
+      view |> element("#select-sound-#{other.id}") |> render_click()
+
+      ids = Enum.join(Enum.sort([sound.id, other.id]), ",")
+
+      assert has_element?(
+               view,
+               ~s{a#download-selected[href="/sounds/download?ids=#{URI.encode_www_form(ids)}"]}
+             )
     end
   end
 
